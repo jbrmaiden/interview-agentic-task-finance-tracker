@@ -24,11 +24,9 @@ test.describe("Accounts", () => {
     await expect(modal).toBeHidden();
 
     await page.goto("/accounts");
-    const row = page
-      .getByTestId("delete-account")
-      .locator("xpath=ancestor::div[contains(@class,'group/row')][1]");
-    await expect(row).toContainText("Main");
-    await expect(row).toContainText(/PLN\s*1(?!\d)/);
+    const row = page.getByRole("group", { name: "Main", exact: true });
+    await expect(row.getByText("PLN", { exact: true })).toBeVisible();
+    await expect(row.getByText("1", { exact: true })).toBeVisible();
 
     await page.getByTestId("delete-account").click();
     const dialog = page.getByRole("alertdialog");

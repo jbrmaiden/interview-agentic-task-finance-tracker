@@ -257,7 +257,11 @@ function AccountRow({
   onDelete: (id: string) => void;
 }) {
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors group/row">
+    <div
+      role="group"
+      aria-label={account.name}
+      className="flex items-center gap-3 px-3 py-2.5 hover:bg-accent/50 transition-colors"
+    >
       {/* Name */}
       <span className="flex-1 text-sm font-medium truncate">
         {account.name}
