@@ -261,7 +261,8 @@ function BudgetItem({
   return (
     <div
       className="px-3 py-3 space-y-2"
-      data-testid="budget-row"
+      role="group"
+      aria-label={budget.categoryName}
       data-over-budget={budget.overBudget}
       style={{ paddingLeft: `${depth * 24 + 12}px` }}
     >
@@ -302,14 +303,8 @@ function BudgetItem({
           </span>
         )}
         <span className="flex gap-1.5">
-          <EditButton
-            onClick={() => onEdit(budget)}
-            data-testid="edit-budget"
-          />
-          <DeleteButton
-            onClick={() => onRemove(budget)}
-            data-testid="remove-budget"
-          />
+          <EditButton onClick={() => onEdit(budget)} />
+          <DeleteButton onClick={() => onRemove(budget)} />
         </span>
       </div>
       <div

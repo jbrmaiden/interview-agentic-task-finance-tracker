@@ -48,7 +48,7 @@ async function addBudget(page: Page, category: string, limit: string) {
 }
 
 const row = (page: Page, category: string) =>
-  page.getByTestId("budget-row").filter({ hasText: category });
+  page.getByRole("group", { name: category, exact: true });
 
 test.describe("Budgets", () => {
   test("is reachable from the sidebar and shows the budget month and an empty state", async ({
@@ -232,7 +232,7 @@ test.describe("Budgets", () => {
     await addBudget(page, "Pets", "100");
     await expect(row(page, "Pets")).toContainText("70.00 PLN left");
 
-    await row(page, "Pets").getByTestId("edit-budget").click();
+    await row(page, "Pets").getByRole("button", { name: "Edit" }).click();
     const dialog = page.getByRole("dialog", { name: "Edit Budget" });
     await expect(dialog.getByLabel("Category")).toHaveValue("Pets");
     await expect(dialog.getByLabel("Category")).toBeDisabled();
@@ -261,13 +261,13 @@ test.describe("Budgets", () => {
     await addBudget(page, "Hobbies", "50");
     await expect(row(page, "Hobbies")).toBeVisible();
 
-    await row(page, "Hobbies").getByTestId("remove-budget").click();
+    await row(page, "Hobbies").getByRole("button", { name: "Delete" }).click();
     const confirm = page.getByRole("alertdialog", { name: "Remove budget?" });
     await confirm.getByRole("button", { name: "Cancel" }).click();
     await expect(confirm).toBeHidden();
     await expect(row(page, "Hobbies")).toBeVisible();
 
-    await row(page, "Hobbies").getByTestId("remove-budget").click();
+    await row(page, "Hobbies").getByRole("button", { name: "Delete" }).click();
     await confirm.getByRole("button", { name: "Remove" }).click();
     await expect(row(page, "Hobbies")).toBeHidden();
     await expect(page.getByText("No budgets yet")).toBeVisible();
@@ -302,7 +302,7 @@ test.describe("Budgets", () => {
     await addDialog.getByRole("button", { name: "Cancel" }).click();
 
     // Edit
-    await row(page, "Flaky").getByTestId("edit-budget").click();
+    await row(page, "Flaky").getByRole("button", { name: "Edit" }).click();
     const editDialog = page.getByRole("dialog", { name: "Edit Budget" });
     await editDialog.getByLabel("Monthly limit").fill("60");
     await editDialog.getByRole("button", { name: "Save Budget" }).click();
@@ -315,7 +315,7 @@ test.describe("Budgets", () => {
     await editDialog.getByRole("button", { name: "Cancel" }).click();
 
     // Remove
-    await row(page, "Flaky").getByTestId("remove-budget").click();
+    await row(page, "Flaky").getByRole("button", { name: "Delete" }).click();
     const confirm = page.getByRole("alertdialog", { name: "Remove budget?" });
     await confirm.getByRole("button", { name: "Remove" }).click();
     await expect(confirm.getByRole("alert")).toHaveText(
@@ -338,7 +338,7 @@ test.describe("Budgets", () => {
     await addBudget(page, "Garden", "100");
     await addBudget(page, "— Seeds", "20");
     await addBudget(page, "Keepers", "30");
-    await expect(page.getByTestId("budget-row")).toHaveCount(3);
+    await expect(page.getByRole("main").getByRole("group")).toHaveCount(3);
 
     await page.goto("/categories");
     const parentRow = page.getByRole("row").filter({ hasText: "Garden" });
@@ -351,7 +351,7 @@ test.describe("Budgets", () => {
 
     await page.goto("/budgets");
     await expect(row(page, "Keepers")).toBeVisible();
-    await expect(page.getByTestId("budget-row")).toHaveCount(1);
+    await expect(page.getByRole("main").getByRole("group")).toHaveCount(1);
   });
 });
 
@@ -415,7 +415,7 @@ test.describe("Budgets free-plan allowance", () => {
     ).toHaveAttribute("href", "/billing");
 
     // Removing one frees an allowance slot.
-    await row(page, names[0]).getByTestId("remove-budget").click();
+    await row(page, names[0]).getByRole("button", { name: "Delete" }).click();
     await page
       .getByRole("alertdialog")
       .getByRole("button", { name: "Remove", exact: true })
