@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
 import { formatMoney, parseAmountToMinor } from "#/lib/money";
 import { m } from "#/paraglide/messages";
@@ -271,27 +271,37 @@ export type RemoveBudgetResult =
   | { id: string }
   | { error: string; code: "budget_not_found" };
 
+/**
+ * Delete the alert records of the given budgets. They reference the budgets,
+ * so this must run before the budgets themselves are deleted.
+ */
+async function removeAlertsForBudgets(
+  budgetIdsToRemove: SQLWrapper,
+  db: Db,
+): Promise<void> {
+  await db
+    .delete(schema.budget_alerts)
+    .where(inArray(schema.budget_alerts.budget_id, budgetIdsToRemove));
+}
+
 /** Remove a budget. Transactions and categories are never touched. */
 export async function removeBudget(
   userId: string,
   budgetId: string,
   db: Db = defaultDb,
 ): Promise<RemoveBudgetResult> {
-  // Alert records first: they reference the budget.
-  const owned = db
+  const isTheBudget = and(
+    eq(schema.budgets.id, budgetId),
+    eq(schema.budgets.user_id, userId),
+  );
+  const budgetIdsToRemove = db
     .select({ id: schema.budgets.id })
     .from(schema.budgets)
-    .where(
-      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
-    );
-  await db
-    .delete(schema.budget_alerts)
-    .where(inArray(schema.budget_alerts.budget_id, owned));
+    .where(isTheBudget);
+  await removeAlertsForBudgets(budgetIdsToRemove, db);
   const deleted = await db
     .delete(schema.budgets)
-    .where(
-      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
-    )
+    .where(isTheBudget)
     .returning({ id: schema.budgets.id });
   if (deleted.length === 0) {
     return { error: "Budget not found", code: "budget_not_found" };
@@ -306,26 +316,16 @@ export async function removeBudgetsForCategories(
   db: Db = defaultDb,
 ): Promise<void> {
   if (categoryIds.length === 0) return;
-  const doomed = db
+  const onTheCategories = and(
+    eq(schema.budgets.user_id, userId),
+    inArray(schema.budgets.category_id, categoryIds),
+  );
+  const budgetIdsToRemove = db
     .select({ id: schema.budgets.id })
     .from(schema.budgets)
-    .where(
-      and(
-        eq(schema.budgets.user_id, userId),
-        inArray(schema.budgets.category_id, categoryIds),
-      ),
-    );
-  await db
-    .delete(schema.budget_alerts)
-    .where(inArray(schema.budget_alerts.budget_id, doomed));
-  await db
-    .delete(schema.budgets)
-    .where(
-      and(
-        eq(schema.budgets.user_id, userId),
-        inArray(schema.budgets.category_id, categoryIds),
-      ),
-    );
+    .where(onTheCategories);
+  await removeAlertsForBudgets(budgetIdsToRemove, db);
+  await db.delete(schema.budgets).where(onTheCategories);
 }
 
 export interface BudgetAlertCheckInput {
