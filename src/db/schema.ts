@@ -309,6 +309,29 @@ export const budgets = pgTable(
   ],
 );
 
+// Ledger of budget alert emails: at most one per budget per budget month.
+// The unique key is what makes the claim-then-send protocol race-safe.
+export const budget_alerts = pgTable(
+  "budget_alerts",
+  {
+    budget_id: text("budget_id")
+      .notNull()
+      .references(() => budgets.id),
+    user_id: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    // Budget month, "YYYY-MM" (UTC).
+    month: text("month").notNull(),
+    sent_at: timestamp("sent_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("budget_alerts_budget_month_uniq").on(t.budget_id, t.month),
+    index("budget_alerts_user_idx").on(t.user_id),
+  ],
+);
+
 export const todos = pgTable("todos", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
