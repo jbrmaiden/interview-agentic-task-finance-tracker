@@ -567,6 +567,37 @@ describe("budget allowance", () => {
     }
     expect((await listBudgets(limitUser, NOW, db)).budgets).toHaveLength(4);
   });
+
+  it("reports the budget allowance and usage for a free user", async () => {
+    const cats = await addMany(2);
+    for (const c of cats) {
+      await createBudget(
+        limitUser,
+        { categoryId: c, currency: "PLN", limit: "10" },
+        db,
+      );
+    }
+    expect(await listBudgets(limitUser, NOW, db)).toMatchObject({
+      budgetAllowance: 3,
+      budgetsUsed: 2,
+    });
+  });
+
+  it("reports an unlimited budget allowance (null) for a pro user", async () => {
+    await setPlan("pro");
+    const cats = await addMany(4);
+    for (const c of cats) {
+      await createBudget(
+        limitUser,
+        { categoryId: c, currency: "PLN", limit: "10" },
+        db,
+      );
+    }
+    expect(await listBudgets(limitUser, NOW, db)).toMatchObject({
+      budgetAllowance: null,
+      budgetsUsed: 4,
+    });
+  });
 });
 
 describe("budget alerts", () => {
