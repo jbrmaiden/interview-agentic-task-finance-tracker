@@ -116,4 +116,18 @@ m.current_locale({ locale: "en" });         // message with parameters
 
 **Reference:** See `todo.md` for the full migration guide and Paraglide usage examples.
 
+## Agent skills
+
+  ### Issue tracker
+  
+  Local markdown: specs and tickets live under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+  ### Triage labels
+
+  Default five roles (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix), recorded as a `Status:` line in each ticket file. See `docs/agents/triage-labels.md`.
+
+  ### Domain docs
+
+  Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+
 ---

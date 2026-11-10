@@ -19,8 +19,6 @@ test-results/
 playwright-report/
 .playwright-cli
 .playwright-mcp
-.agents
-.claude
 .cursorrules
 .mcp.json
 lat.md/.cache
