@@ -5,6 +5,7 @@ import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/db/index.ts";
 import {
+  runBudgetAlertCheck,
   changeBudgetLimit,
   createBudget,
   listBudgets,
@@ -70,6 +71,9 @@ describe("budgets module", () => {
 
   afterEach(async () => {
     for (const id of [userId, otherUserId]) {
+      await db
+        .delete(schema.budget_alerts)
+        .where(eq(schema.budget_alerts.user_id, id));
       await db.delete(schema.budgets).where(eq(schema.budgets.user_id, id));
       await db
         .delete(schema.transactions)
@@ -560,5 +564,230 @@ describe("budget allowance", () => {
       expect("id" in r).toBe(true);
     }
     expect((await listBudgets(limitUser, NOW, db)).budgets).toHaveLength(4);
+  });
+});
+
+describe("budget alerts", () => {
+  const alertUser = "budget-alerts-user";
+  const email = "budget-alerts-user@example.com";
+  const DEC = new Date("2026-12-05T12:00:00Z");
+  let sent: Array<{ to: string; subject: string; text: string }>;
+  const send = async (msg: { to: string; subject: string; text: string }) => {
+    sent.push(msg);
+  };
+  const check = (now = NOW, sender = send) =>
+    runBudgetAlertCheck({ userId: alertUser, now, db, send: sender });
+
+  async function setup(limit: string, spentMinor: number, name = "Alert Food") {
+    const cat = await addCategory(name, null, alertUser);
+    const acc = await addAccount("PLN", alertUser);
+    if (spentMinor > 0) {
+      await addTx({
+        accountId: acc,
+        categoryId: cat,
+        amountMinor: -spentMinor,
+        date: "2026-11-03",
+        owner: alertUser,
+      });
+    }
+    const created = await createBudget(
+      alertUser,
+      { categoryId: cat, currency: "PLN", limit },
+      db,
+    );
+    if (!("id" in created)) throw new Error("budget not created");
+    return { cat, acc, budgetId: created.id };
+  }
+
+  beforeEach(async () => {
+    sent = [];
+    await db.insert(schema.users).values({
+      id: alertUser,
+      username: alertUser,
+      email,
+      email_verified_at: new Date(),
+      password_hash: "x",
+    });
+  });
+
+  afterEach(async () => {
+    await db
+      .delete(schema.budget_alerts)
+      .where(eq(schema.budget_alerts.user_id, alertUser));
+    await db.delete(schema.budgets).where(eq(schema.budgets.user_id, alertUser));
+    await db
+      .delete(schema.transactions)
+      .where(eq(schema.transactions.user_id, alertUser));
+    await db.delete(schema.accounts).where(eq(schema.accounts.user_id, alertUser));
+    await db
+      .delete(schema.categories)
+      .where(eq(schema.categories.user_id, alertUser));
+    await db.delete(schema.users).where(eq(schema.users.id, alertUser));
+  });
+
+  it("sends one email naming the category, limit, spending and overshoot", async () => {
+    await setup("100.00", 15050);
+    await check();
+    await check();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.to).toBe(email);
+    const body = `${sent[0]!.subject}\n${sent[0]!.text}`;
+    expect(body).toContain("Alert Food");
+    expect(body).toContain("100.00 PLN");
+    expect(body).toContain("150.50 PLN");
+    expect(body).toContain("50.50 PLN");
+    expect(body).toMatch(/\/budgets/);
+  });
+
+  it("does not alert while spending is within the limit", async () => {
+    await setup("100.00", 10000);
+    await check();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("does not resend after the limit is raised, even if still over", async () => {
+    const { budgetId } = await setup("100.00", 15000);
+    await check();
+    await changeBudgetLimit(alertUser, budgetId, "120.00", db);
+    await check();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("alerts again in a new budget month", async () => {
+    const { acc, cat } = await setup("100.00", 15000);
+    await check();
+    await addTx({
+      accountId: acc,
+      categoryId: cat,
+      amountMinor: -20000,
+      date: "2026-12-02",
+      owner: alertUser,
+    });
+    await check(DEC);
+    expect(sent).toHaveLength(2);
+  });
+
+  it("alerts when a budget is created with a limit below current spending", async () => {
+    await setup("10.00", 5000);
+    await check();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("alerts when a limit is lowered below current spending", async () => {
+    const { budgetId } = await setup("100.00", 5000);
+    await check();
+    expect(sent).toHaveLength(0);
+    await changeBudgetLimit(alertUser, budgetId, "20.00", db);
+    await check();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("skips an unverified user without using up the alert, then sends after verification", async () => {
+    await setup("100.00", 15000);
+    await db
+      .update(schema.users)
+      .set({ email_verified_at: null })
+      .where(eq(schema.users.id, alertUser));
+    await check();
+    expect(sent).toHaveLength(0);
+    await db
+      .update(schema.users)
+      .set({ email_verified_at: new Date() })
+      .where(eq(schema.users.id, alertUser));
+    await check();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("skips a user without an email", async () => {
+    await setup("100.00", 15000);
+    await db
+      .update(schema.users)
+      .set({ email: null })
+      .where(eq(schema.users.id, alertUser));
+    await check();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("retries on a later check after a failed send", async () => {
+    await setup("100.00", 15000);
+    await check(NOW, async () => {
+      throw new Error("smtp down");
+    });
+    expect(sent).toHaveLength(0);
+    await check();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("alerts parent and child budgets independently", async () => {
+    const parent = await addCategory("Alert Parent", null, alertUser);
+    const child = await addCategory("Alert Child", parent, alertUser);
+    const acc = await addAccount("PLN", alertUser);
+    await addTx({
+      accountId: acc,
+      categoryId: child,
+      amountMinor: -3000,
+      date: "2026-11-03",
+      owner: alertUser,
+    });
+    await createBudget(
+      alertUser,
+      { categoryId: child, currency: "PLN", limit: "20.00" },
+      db,
+    );
+    await createBudget(
+      alertUser,
+      { categoryId: parent, currency: "PLN", limit: "100.00" },
+      db,
+    );
+    await check();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain("Alert Child");
+
+    await addTx({
+      accountId: acc,
+      categoryId: parent,
+      amountMinor: -9000,
+      date: "2026-11-04",
+      owner: alertUser,
+    });
+    await check();
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.text).toContain("Alert Parent");
+  });
+
+  it("never alerts for spending in earlier months", async () => {
+    const cat = await addCategory("Alert Old", null, alertUser);
+    const acc = await addAccount("PLN", alertUser);
+    await addTx({
+      accountId: acc,
+      categoryId: cat,
+      amountMinor: -50000,
+      date: "2026-10-20",
+      owner: alertUser,
+    });
+    await createBudget(
+      alertUser,
+      { categoryId: cat, currency: "PLN", limit: "10.00" },
+      db,
+    );
+    await check();
+    expect(sent).toHaveLength(0);
+  });
+
+  it("removeBudget and removeBudgetsForCategories drop the alert records", async () => {
+    const a = await setup("10.00", 5000, "Alert A");
+    const b = await setup("10.00", 5000, "Alert B");
+    await check();
+    expect(sent).toHaveLength(2);
+
+    expect(await removeBudget(alertUser, a.budgetId, db)).toEqual({
+      id: a.budgetId,
+    });
+    await removeBudgetsForCategories(alertUser, [b.cat], db);
+    const left = await db
+      .select()
+      .from(schema.budget_alerts)
+      .where(eq(schema.budget_alerts.user_id, alertUser));
+    expect(left).toHaveLength(0);
   });
 });

@@ -329,6 +329,9 @@ export async function hardDeleteUser(userId: string): Promise<void> {
       .delete(schema.subscriptions)
       .where(eq(schema.subscriptions.user_id, userId));
     await tx.delete(schema.accounts).where(eq(schema.accounts.user_id, userId));
+    await tx
+      .delete(schema.budget_alerts)
+      .where(eq(schema.budget_alerts.user_id, userId));
     await tx.delete(schema.budgets).where(eq(schema.budgets.user_id, userId));
     await tx
       .delete(schema.categories)

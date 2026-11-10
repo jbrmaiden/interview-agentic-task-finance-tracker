@@ -6,6 +6,7 @@ import {
   createBudget,
   listBudgets,
   removeBudget,
+  runBudgetAlertCheckSafely,
 } from "#/server/budgets.server";
 
 const createBudgetSchema = z.object({
@@ -25,7 +26,9 @@ export const createBudgetFn = createServerFn({ method: "POST" })
   .inputValidator(createBudgetSchema)
   .handler(async ({ data }) => {
     const userId = await requireUserId();
-    return createBudget(userId, data);
+    const result = await createBudget(userId, data);
+    if ("id" in result) await runBudgetAlertCheckSafely(userId);
+    return result;
   });
 
 const changeLimitSchema = z.object({
@@ -37,7 +40,9 @@ export const changeBudgetLimitFn = createServerFn({ method: "POST" })
   .inputValidator(changeLimitSchema)
   .handler(async ({ data }) => {
     const userId = await requireUserId();
-    return changeBudgetLimit(userId, data.id, data.limit);
+    const result = await changeBudgetLimit(userId, data.id, data.limit);
+    if ("id" in result) await runBudgetAlertCheckSafely(userId);
+    return result;
   });
 
 export const removeBudgetFn = createServerFn({ method: "POST" })

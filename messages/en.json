@@ -294,6 +294,8 @@
   "verify_banner_resent": "Verification email sent. Check your inbox.",
   "logout_everywhere": "Log out everywhere",
   "logout_everywhere_desc": "Signs you out on every device, including this one.",
+  "email_budget_alert_subject": "Over budget: {category} — Finance Tracker",
+  "email_budget_alert_body": "Your {category} budget for this month is over its limit.\n\nLimit: {limit}\nSpent: {spent}\nOver by: {over}\n\nReview your budgets: {link}\n\nYou get at most one alert per budget each month.",
   "email_verify_subject": "Verify your email — Finance Tracker",
   "email_verify_body": "Welcome to Finance Tracker!\n\nPlease confirm your email address by opening this link:\n\n{link}\n\nThe link is valid for 24 hours. If you didn't create this account, you can ignore this email.",
   "email_reset_subject": "Reset your password — Finance Tracker",

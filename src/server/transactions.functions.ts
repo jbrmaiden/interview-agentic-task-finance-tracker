@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, asc, desc, count, gte, lte, ilike, isNull, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
+import { runBudgetAlertCheckSafely } from "#/server/budgets.server";
 import { ownedEntityExists } from "#/server/ownership.server";
 import { requireUserId } from "#/server/session";
 
@@ -303,6 +304,8 @@ export const createTransaction = createServerFn({ method: "POST" })
       source_ref: data.sourceRef || null,
     });
 
+    await runBudgetAlertCheckSafely(userId);
+
     return {
       id,
       account_id: data.accountId,
@@ -378,6 +381,8 @@ export const updateTransaction = createServerFn({ method: "POST" })
           eq(schema.transactions.user_id, userId),
         ),
       );
+
+    await runBudgetAlertCheckSafely(userId);
 
     return { success: true };
   });
