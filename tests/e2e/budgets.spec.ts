@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test, expect, type Page } from "./fixtures";
 
 // Transactions are dated today (UTC) so they fall in the current budget month.
@@ -215,6 +217,91 @@ test.describe("Budgets", () => {
     await expect(dialog.getByLabel("Currency")).toHaveValue("PLN");
     await expect(dialog.getByLabel("Currency").locator("option")).toHaveCount(1);
   });
+
+  test("edits only the limit; category and currency are read-only", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await createCategory(page, "Pets");
+    await createTransaction(page, {
+      description: "Kibble",
+      amount: "30",
+      category: "Pets",
+    });
+    await addBudget(page, "Pets", "100");
+    await expect(row(page, "Pets")).toContainText("70.00 PLN left");
+
+    await row(page, "Pets").getByTestId("edit-budget").click();
+    const dialog = page.getByRole("dialog", { name: "Edit Budget" });
+    await expect(dialog.getByLabel("Category")).toHaveValue("Pets");
+    await expect(dialog.getByLabel("Category")).toBeDisabled();
+    await expect(dialog.getByLabel("Currency")).toHaveValue("PLN");
+    await expect(dialog.getByLabel("Currency")).toBeDisabled();
+    await expect(dialog.getByLabel("Monthly limit")).toHaveValue("100.00");
+
+    await dialog.getByLabel("Monthly limit").fill("0");
+    await dialog.getByRole("button", { name: "Save Budget" }).click();
+    await expect(dialog.getByRole("alert")).toHaveText(
+      "Enter a limit greater than zero",
+    );
+
+    await dialog.getByLabel("Monthly limit").fill("20,50");
+    await dialog.getByRole("button", { name: "Save Budget" }).click();
+    await expect(dialog).toBeHidden();
+    await expect(row(page, "Pets")).toContainText("20.50 PLN");
+    await expect(row(page, "Pets")).toContainText("Over by 9.50 PLN");
+  });
+
+  test("removes a budget only after confirming, leaving the category", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await createCategory(page, "Hobbies");
+    await addBudget(page, "Hobbies", "50");
+    await expect(row(page, "Hobbies")).toBeVisible();
+
+    await row(page, "Hobbies").getByTestId("remove-budget").click();
+    const confirm = page.getByRole("alertdialog", { name: "Remove budget?" });
+    await confirm.getByRole("button", { name: "Cancel" }).click();
+    await expect(confirm).toBeHidden();
+    await expect(row(page, "Hobbies")).toBeVisible();
+
+    await row(page, "Hobbies").getByTestId("remove-budget").click();
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(row(page, "Hobbies")).toBeHidden();
+    await expect(page.getByText("No budgets yet")).toBeVisible();
+
+    await page.goto("/categories");
+    await expect(
+      page.getByText("Hobbies", { exact: true }).first(),
+    ).toBeVisible();
+  });
+
+  test("deleting a budgeted category (and its subcategory) removes its budgets", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await createCategory(page, "Garden");
+    await createCategory(page, "Seeds", "Garden");
+    await createCategory(page, "Keepers");
+    await addBudget(page, "Garden", "100");
+    await addBudget(page, "— Seeds", "20");
+    await addBudget(page, "Keepers", "30");
+    await expect(page.getByTestId("budget-row")).toHaveCount(3);
+
+    await page.goto("/categories");
+    const parentRow = page.getByRole("row").filter({ hasText: "Garden" });
+    await parentRow.getByTestId("delete-category").click();
+    await page
+      .getByRole("alertdialog", { name: "Delete Category" })
+      .getByRole("button", { name: "Delete" })
+      .click();
+    await expect(page.locator("main").getByText("Garden")).toBeHidden();
+
+    await page.goto("/budgets");
+    await expect(row(page, "Keepers")).toBeVisible();
+    await expect(page.getByTestId("budget-row")).toHaveCount(1);
+  });
 });
 
 test.describe("Budgets free-plan allowance", () => {
@@ -286,5 +373,67 @@ test.describe("Budgets free-plan allowance", () => {
     await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
       "4 of 3 budgets",
     );
+  });
+});
+
+test.describe("Budgets without accounts", () => {
+  async function deleteMainAccount(page: Page) {
+    await page.goto("/accounts");
+    await page.getByTestId("delete-account").first().click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(page.getByTestId("delete-account")).toHaveCount(0);
+  }
+
+  const msg = JSON.parse(
+    readFileSync(join(process.cwd(), "messages/en.json"), "utf8"),
+  ) as Record<string, string>;
+
+  test("with no accounts, budgets asks to add an account first and cannot add a budget", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await deleteMainAccount(page);
+    await page.goto("/budgets");
+
+    await expect(
+      page.getByRole("heading", { name: msg.budgets_need_account }),
+    ).toBeVisible();
+    await expect(page.getByText(msg.budgets_need_account_desc)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: msg.budgets_go_to_accounts }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add Budget" })).toHaveCount(
+      0,
+    );
+  });
+
+  test("adding an account makes budgets available in that currency", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await deleteMainAccount(page);
+    await page.goto("/budgets");
+    await page
+      .getByRole("link", { name: msg.budgets_go_to_accounts })
+      .click();
+    await expect(page).toHaveURL("/accounts");
+
+    await page.getByRole("button", { name: "Add Account" }).click();
+    await page.getByLabel("Account Name").fill("Dollar Wallet");
+    await page.getByLabel("Currency").fill("USD");
+    await page.getByRole("button", { name: "Create Account" }).click();
+    await expect(page.getByText("Dollar Wallet")).toBeVisible();
+
+    await page.goto("/budgets");
+    await expect(
+      page.getByRole("heading", { name: msg.budgets_need_account }),
+    ).toBeHidden();
+    await page.getByRole("button", { name: "Add Budget" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add Budget" });
+    await expect(dialog.getByLabel("Currency")).toHaveValue("USD");
+    await expect(dialog.getByLabel("Currency").locator("option")).toHaveCount(1);
   });
 });

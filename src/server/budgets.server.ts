@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
 import { parseAmountToMinor } from "#/lib/money";
 import { checkBudgetLimit } from "#/server/billing.server";
@@ -68,14 +68,15 @@ async function loadCurrencies(
     ...new Set(rows.map((r) => r.currency ?? "PLN")),
   ].sort();
 
-  // Currency of the account with the most transactions; PLN when there are
-  // none or when accounts in different currencies tie for the most.
+  // Currency of the account with the most transactions. On a tie or with no
+  // transactions: PLN if the user has it, else their first sorted currency.
+  const fallback = currencies.includes("PLN") ? "PLN" : (currencies[0] ?? "PLN");
   const top = Math.max(0, ...rows.map((r) => r.txCount));
   const topCurrencies = new Set(
     rows.filter((r) => r.txCount === top).map((r) => r.currency ?? "PLN"),
   );
   const defaultCurrency =
-    top > 0 && topCurrencies.size === 1 ? [...topCurrencies][0]! : "PLN";
+    top > 0 && topCurrencies.size === 1 ? [...topCurrencies][0]! : fallback;
   return { currencies, defaultCurrency };
 }
 
@@ -115,7 +116,7 @@ export async function listBudgets(
           AND tx.amount_minor < 0
           AND tx.date >= ${from}::date AND tx.date < ${to}::date
           AND a.currency = b.currency
-      ), 0)::float8 AS spent_minor
+      ), 0)::bigint AS spent_minor
     FROM ${schema.budgets} b
     JOIN ${schema.categories} cat ON cat.id = b.category_id
     WHERE b.user_id = ${userId}
@@ -148,6 +149,16 @@ export async function listBudgets(
   };
 }
 
+/** Postgres `integer` maximum, the type of `budgets.limit_minor`. */
+const MAX_LIMIT_MINOR = 2147483647;
+
+/** Parse a typed limit; null when not a positive amount that fits the column. */
+function parseLimit(limit: string): number | null {
+  const minor = parseAmountToMinor(limit);
+  if (minor === null || minor <= 0 || minor > MAX_LIMIT_MINOR) return null;
+  return minor;
+}
+
 export type CreateBudgetInput = {
   categoryId: string;
   currency: string;
@@ -171,8 +182,8 @@ export async function createBudget(
   input: CreateBudgetInput,
   db: Db = defaultDb,
 ): Promise<CreateBudgetResult> {
-  const limitMinor = parseAmountToMinor(input.limit);
-  if (limitMinor === null || limitMinor <= 0) {
+  const limitMinor = parseLimit(input.limit);
+  if (limitMinor === null) {
     return { error: "Limit must be a positive amount", code: "invalid_limit" };
   }
 
@@ -222,3 +233,71 @@ export async function createBudget(
   return { id };
 }
 
+
+export type ChangeBudgetLimitResult =
+  | { id: string }
+  | { error: string; code: "invalid_limit" | "budget_not_found" };
+
+/** Change only the limit; category and currency are fixed after creation. */
+export async function changeBudgetLimit(
+  userId: string,
+  budgetId: string,
+  limit: string,
+  db: Db = defaultDb,
+): Promise<ChangeBudgetLimitResult> {
+  const limitMinor = parseLimit(limit);
+  if (limitMinor === null) {
+    return { error: "Limit must be a positive amount", code: "invalid_limit" };
+  }
+  // Ownership in the same query: foreign budget == missing budget.
+  const updated = await db
+    .update(schema.budgets)
+    .set({ limit_minor: limitMinor, updated_at: new Date() })
+    .where(
+      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
+    )
+    .returning({ id: schema.budgets.id });
+  if (updated.length === 0) {
+    return { error: "Budget not found", code: "budget_not_found" };
+  }
+  return { id: budgetId };
+}
+
+export type RemoveBudgetResult =
+  | { id: string }
+  | { error: string; code: "budget_not_found" };
+
+/** Remove a budget. Transactions and categories are never touched. */
+export async function removeBudget(
+  userId: string,
+  budgetId: string,
+  db: Db = defaultDb,
+): Promise<RemoveBudgetResult> {
+  const deleted = await db
+    .delete(schema.budgets)
+    .where(
+      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
+    )
+    .returning({ id: schema.budgets.id });
+  if (deleted.length === 0) {
+    return { error: "Budget not found", code: "budget_not_found" };
+  }
+  return { id: budgetId };
+}
+
+/** Remove every budget on the given categories (used by category deletion). */
+export async function removeBudgetsForCategories(
+  userId: string,
+  categoryIds: string[],
+  db: Db = defaultDb,
+): Promise<void> {
+  if (categoryIds.length === 0) return;
+  await db
+    .delete(schema.budgets)
+    .where(
+      and(
+        eq(schema.budgets.user_id, userId),
+        inArray(schema.budgets.category_id, categoryIds),
+      ),
+    );
+}

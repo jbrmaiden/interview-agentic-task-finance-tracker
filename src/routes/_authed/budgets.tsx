@@ -15,9 +15,25 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#/components/ui/dialog";
-import { getBudgets, createBudgetFn } from "#/server/budgets.functions";
+import { EditButton, DeleteButton } from "#/components/ui/action-buttons";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "#/components/ui/alert-dialog";
+import {
+  getBudgets,
+  createBudgetFn,
+  changeBudgetLimitFn,
+  removeBudgetFn,
+} from "#/server/budgets.functions";
 import { getCategories } from "#/server/categories.functions";
-import { formatMoney, parseAmountToMinor } from "#/lib/money";
+import { formatMinor, formatMoney, parseAmountToMinor } from "#/lib/money";
 
 const BUDGETS_QUERY_KEY = ["budgets"] as const;
 const CATEGORIES_QUERY_KEY = ["categories"] as const;
@@ -71,6 +87,8 @@ function errorMessage(
       return m.budget_exists();
     case "invalid_limit":
       return m.budget_limit_invalid();
+    case "budget_not_found":
+      return m.budget_not_found();
     default:
       return fallback;
   }
@@ -223,7 +241,17 @@ function BudgetForm({
 
 // --- Row ---
 
-function BudgetItem({ budget, depth }: { budget: BudgetRow; depth: number }) {
+function BudgetItem({
+  budget,
+  depth,
+  onEdit,
+  onRemove,
+}: {
+  budget: BudgetRow;
+  depth: number;
+  onEdit: (b: BudgetRow) => void;
+  onRemove: (b: BudgetRow) => void;
+}) {
   const percent =
     budget.limitMinor > 0
       ? Math.min(100, Math.round((budget.spentMinor / budget.limitMinor) * 100))
@@ -271,6 +299,16 @@ function BudgetItem({ budget, depth }: { budget: BudgetRow; depth: number }) {
             {m.budget_over_label()}
           </span>
         )}
+        <span className="flex gap-1.5">
+          <EditButton
+            onClick={() => onEdit(budget)}
+            data-testid="edit-budget"
+          />
+          <DeleteButton
+            onClick={() => onRemove(budget)}
+            data-testid="remove-budget"
+          />
+        </span>
       </div>
       <div
         role="progressbar"
@@ -291,6 +329,162 @@ function BudgetItem({ budget, depth }: { budget: BudgetRow; depth: number }) {
   );
 }
 
+// --- Edit form: only the limit is editable ---
+
+function EditBudgetForm({
+  budget,
+  error,
+  onClose,
+  onSubmit,
+}: {
+  budget: BudgetRow | null;
+  error: string | null;
+  onClose: () => void;
+  onSubmit: (limit: string) => Promise<void>;
+}) {
+  const [limit, setLimit] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (budget) {
+      setLimit(formatMinor(budget.limitMinor));
+      setValidationError(null);
+      setSubmitting(false);
+    }
+  }, [budget]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const minor = parseAmountToMinor(limit);
+    if (minor === null || minor <= 0) {
+      setValidationError(m.budget_limit_invalid());
+      return;
+    }
+    setValidationError(null);
+    setSubmitting(true);
+    try {
+      await onSubmit(limit);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={budget !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{m.edit_budget()}</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+          <div>
+            <Label htmlFor="edit-budget-category" className="mb-1">
+              {m.budget_category_label()}
+            </Label>
+            <Input
+              id="edit-budget-category"
+              value={budget?.categoryName ?? ""}
+              readOnly
+              disabled
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-budget-currency" className="mb-1">
+              {m.budget_currency_label()}
+            </Label>
+            <Input
+              id="edit-budget-currency"
+              value={budget?.currency ?? ""}
+              readOnly
+              disabled
+            />
+          </div>
+          <div>
+            <Label htmlFor="edit-budget-limit" className="mb-1">
+              {m.budget_limit_label()}
+            </Label>
+            <Input
+              id="edit-budget-limit"
+              type="text"
+              inputMode="decimal"
+              value={limit}
+              onChange={(e) => setLimit(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+
+          {(validationError || error) && (
+            <div className="text-destructive text-sm" role="alert">
+              {validationError ?? error}
+            </div>
+          )}
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              {m.cancel()}
+            </Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? m.saving() : m.save_budget_btn()}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// --- Remove confirmation ---
+
+function RemoveBudgetDialog({
+  budget,
+  error,
+  onCancel,
+  onConfirm,
+}: {
+  budget: BudgetRow | null;
+  error: string | null;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <AlertDialog
+      open={budget !== null}
+      onOpenChange={(open) => !open && onCancel()}
+    >
+      <AlertDialogContent className="sm:max-w-sm">
+        <AlertDialogHeader>
+          <AlertDialogTitle>{m.remove_budget_title()}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {m.remove_budget_confirm({
+              category: budget?.categoryName ?? "",
+              currency: budget?.currency ?? "",
+            })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {error && (
+          <div
+            className="text-destructive text-sm p-3 rounded-md bg-destructive/10"
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>{m.cancel()}</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+            {m.remove_budget_btn()}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 // --- Page ---
 
 function BudgetsPage() {
@@ -298,6 +492,8 @@ function BudgetsPage() {
   const getBudgetsFn = useServerFn(getBudgets);
   const getCategoriesFn = useServerFn(getCategories);
   const createBudgetServerFn = useServerFn(createBudgetFn);
+  const changeLimitServerFn = useServerFn(changeBudgetLimitFn);
+  const removeBudgetServerFn = useServerFn(removeBudgetFn);
 
   const { data, isLoading } = useQuery({
     queryKey: BUDGETS_QUERY_KEY,
@@ -320,6 +516,25 @@ function BudgetsPage() {
       queryClient.invalidateQueries({ queryKey: BUDGETS_QUERY_KEY });
     },
   });
+
+  const changeLimitMutation = useMutation({
+    mutationFn: (input: { id: string; limit: string }) =>
+      changeLimitServerFn({ data: input }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BUDGETS_QUERY_KEY });
+    },
+  });
+  const removeMutation = useMutation({
+    mutationFn: (id: string) => removeBudgetServerFn({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: BUDGETS_QUERY_KEY });
+    },
+  });
+
+  const [editing, setEditing] = useState<BudgetRow | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<BudgetRow | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -362,6 +577,31 @@ function BudgetsPage() {
       return;
     }
     setIsFormOpen(false);
+  };
+
+  const handleEdit = async (limit: string) => {
+    if (!editing) return;
+    setEditError(null);
+    const result = await changeLimitMutation.mutateAsync({
+      id: editing.id,
+      limit,
+    });
+    if (result && "error" in result) {
+      setEditError(errorMessage(result.code, result.error));
+      return;
+    }
+    setEditing(null);
+  };
+
+  const handleRemove = async () => {
+    if (!removing) return;
+    setRemoveError(null);
+    const result = await removeMutation.mutateAsync(removing.id);
+    if (result && "error" in result) {
+      setRemoveError(errorMessage(result.code, result.error));
+      return;
+    }
+    setRemoving(null);
   };
 
   return (
@@ -433,6 +673,14 @@ function BudgetsPage() {
                 key={b.id}
                 budget={b}
                 depth={depthById.get(b.categoryId) ?? 0}
+                onEdit={(row) => {
+                  setEditError(null);
+                  setEditing(row);
+                }}
+                onRemove={(row) => {
+                  setRemoveError(null);
+                  setRemoving(row);
+                }}
               />
             ))}
           </div>
@@ -457,6 +705,24 @@ function BudgetsPage() {
           setFormError(null);
         }}
         onSubmit={handleSubmit}
+      />
+      <EditBudgetForm
+        budget={editing}
+        error={editError}
+        onClose={() => {
+          setEditing(null);
+          setEditError(null);
+        }}
+        onSubmit={handleEdit}
+      />
+      <RemoveBudgetDialog
+        budget={removing}
+        error={removeError}
+        onCancel={() => {
+          setRemoving(null);
+          setRemoveError(null);
+        }}
+        onConfirm={handleRemove}
       />
     </div>
   );
