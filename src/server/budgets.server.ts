@@ -1,7 +1,11 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
-import { parseAmountToMinor } from "#/lib/money";
+import { formatMoney, parseAmountToMinor } from "#/lib/money";
+import { m } from "#/paraglide/messages";
 import { checkBudgetLimit } from "#/server/billing.server";
+import { sendEmail, type EmailMessage } from "#/server/email";
+import { env } from "#/server/env";
+import { getLogger } from "#/server/logger";
 
 //
 // The single owner of every budget rule (see GLOSSARY.md and ADR 0001).
@@ -273,6 +277,16 @@ export async function removeBudget(
   budgetId: string,
   db: Db = defaultDb,
 ): Promise<RemoveBudgetResult> {
+  // Alert records first: they reference the budget.
+  const owned = db
+    .select({ id: schema.budgets.id })
+    .from(schema.budgets)
+    .where(
+      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
+    );
+  await db
+    .delete(schema.budget_alerts)
+    .where(inArray(schema.budget_alerts.budget_id, owned));
   const deleted = await db
     .delete(schema.budgets)
     .where(
@@ -292,6 +306,18 @@ export async function removeBudgetsForCategories(
   db: Db = defaultDb,
 ): Promise<void> {
   if (categoryIds.length === 0) return;
+  const doomed = db
+    .select({ id: schema.budgets.id })
+    .from(schema.budgets)
+    .where(
+      and(
+        eq(schema.budgets.user_id, userId),
+        inArray(schema.budgets.category_id, categoryIds),
+      ),
+    );
+  await db
+    .delete(schema.budget_alerts)
+    .where(inArray(schema.budget_alerts.budget_id, doomed));
   await db
     .delete(schema.budgets)
     .where(
@@ -300,4 +326,108 @@ export async function removeBudgetsForCategories(
         inArray(schema.budgets.category_id, categoryIds),
       ),
     );
+}
+
+export interface BudgetAlertCheckInput {
+  userId: string;
+  now?: Date;
+  db?: Db;
+  /** Email sender; injectable so tests can capture sends and fail them. */
+  send?: (message: EmailMessage) => Promise<void>;
+}
+
+export interface BudgetAlertCheckResult {
+  /** Alert emails sent by this check. */
+  sent: number;
+  /** Sends that failed (their claims were released for a later retry). */
+  failed: number;
+}
+
+/**
+ * Email the user about every over-budget budget of the current budget month
+ * that has not been alerted yet. Each budget gets at most one alert per
+ * month: the ledger row is claimed (insert, no-op on conflict) before
+ * sending and released if the send fails so a later check retries. Users
+ * without a verified email are skipped without claiming anything.
+ */
+export async function runBudgetAlertCheck({
+  userId,
+  now = new Date(),
+  db = defaultDb,
+  send = sendEmail,
+}: BudgetAlertCheckInput): Promise<BudgetAlertCheckResult> {
+  const result: BudgetAlertCheckResult = { sent: 0, failed: 0 };
+
+  const [user] = await db
+    .select({
+      email: schema.users.email,
+      email_verified_at: schema.users.email_verified_at,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  if (!user?.email || !user.email_verified_at) return result;
+
+  const { month, budgets } = await listBudgets(userId, now, db);
+  const link = `${env.email.baseUrl}/budgets`;
+
+  for (const budget of budgets) {
+    if (!budget.overBudget) continue;
+
+    const claimed = await db
+      .insert(schema.budget_alerts)
+      .values({ budget_id: budget.id, user_id: userId, month })
+      .onConflictDoNothing()
+      .returning({ budgetId: schema.budget_alerts.budget_id });
+    if (claimed.length === 0) continue;
+
+    try {
+      await send({
+        to: user.email,
+        subject: m.email_budget_alert_subject({
+          category: budget.categoryName,
+        }),
+        text: m.email_budget_alert_body({
+          category: budget.categoryName,
+          limit: formatMoney(budget.limitMinor, budget.currency),
+          spent: formatMoney(budget.spentMinor, budget.currency),
+          over: formatMoney(
+            budget.spentMinor - budget.limitMinor,
+            budget.currency,
+          ),
+          link,
+        }),
+      });
+      result.sent++;
+    } catch {
+      result.failed++;
+      await db
+        .delete(schema.budget_alerts)
+        .where(
+          and(
+            eq(schema.budget_alerts.budget_id, budget.id),
+            eq(schema.budget_alerts.month, month),
+          ),
+        );
+    }
+  }
+  return result;
+}
+
+/**
+ * Run the alert check after a triggering write. Never throws: failures are
+ * logged with ids and counts only and must not fail the user's action.
+ */
+export async function runBudgetAlertCheckSafely(userId: string): Promise<void> {
+  try {
+    const { sent, failed } = await runBudgetAlertCheck({ userId });
+    if (failed > 0) {
+      getLogger().warn({ userId, sent, failed }, "budget alert sends failed");
+    }
+  } catch (err) {
+    getLogger().error(
+      { userId, err: err instanceof Error ? err.message : "unknown" },
+      "budget alert check failed",
+    );
+  }
 }

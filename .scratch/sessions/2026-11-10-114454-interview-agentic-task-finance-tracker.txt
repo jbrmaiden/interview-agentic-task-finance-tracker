@@ -1,0 +1,3034 @@
+▗ ▗   ▖ ▖  Claude Code v2.1.322
+           Opus 5.5 · Claude Pro
+ ▘▘   ▝▝   ~/code/interview-agentic-task-finance-tracker
+
+  Fable 5.2 is here for your longest and toughest coding tasks, and is included in your plan until November 16. It draws down usage faster than Opus 5.5. You also get a free Fable limit reset to redeem at clau.de/reset by November 16. Switch with /model.
+  1 more notice hidden
+
+❯ interview-agentic-task-finance-tracker                                        
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ Bash(cd /Users/jordanboaz/code/interview-agentic-task-finance-tracker && cat
+      TASK.md README.md CLAUDE.md && git log --oneline | head && git status &&
+      ls src src/* te…)
+  ⎿  # Monthly category budgets
+
+     **Type:** User Story · **Priority:** High · **Tags:** budgets, pro-ups
+     … +276 lines (ctrl+o to expand)
+
+  Read 7 files, listed 2 directories (ctrl+o to expand)
+
+⏺ Still mapping the codebase (billing gates, email, compliance sweep, category
+  tree) before proposing a plan for the Budgets feature in TASK.md.
+
+⏺ Bash(sed -n 250,500p src/server/compliance.server.ts; cat
+      src/server/ai-usage.server.ts | head -80; grep -n
+      "billing\|freeMax\|proScans" src/server/env.ts)
+  ⎿          data.categories.find((c) => c.id === item.category_id)?.name,
+           ]),
+         ),
+     … +273 lines (ctrl+o to expand)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ I've read the task and the relevant code. A few product questions in TASK.md
+  aren't settled by the code, so I want your call on them before I build
+  anything:
+
+⏺ User answered Claude's questions:
+  ⎿  · Accounts each have their own currency (PLN default, but USD etc. 
+     allowed), and a budget limit is a single number. How should a budget handle
+     spending across currencies? → Budget has a currency (Recommended)
+     · Receipt line items can carry their own category, separate from the 
+     transaction's category (the dashboard Sankey uses them). Should budgets 
+     count receipt-item categories? → Transaction category only (Recommended)
+     · When should the over-budget email be detected and sent? Transactions 
+     change in ~7 places (manual create/edit, CSV import, receipt scan, 
+     recategorize, category delete/reassign). → After writes + hourly sweep 
+     (Recommended)
+     · Free users who downgrade from Pro with more than 3 budgets — what happens
+     to the extras? → Keep all, block new (Recommended)
+
+⏺ All four go with the recommended options. Next I'll look at the remaining
+  patterns: env config, migrations, the account-limit UI, and i18n.
+
+⏺ Bash(sed -n 1,120p src/server/env.ts; sed -n 195,260p src/server/env.ts; cat
+      src/db/migrate.ts drizzle.config.ts; ls drizzle/meta; cat
+      src/server/accounts.functions.…)
+  ⎿  import { config } from "dotenv";
+     config({ path: [".env.local", ".env"] });
+     … +303 lines (ctrl+o to expand)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(ls messages project.inlang; cat project.inlang/settings.json; grep -c .
+      messages/en.json; grep -n "account_\|billing_accounts\|email_"
+      messages/en.json | head -…)
+  ⎿  messages:
+     en.json
+     … +259 lines (ctrl+o to expand)
+
+⏺ Bash(sed -n 1,330p src/routes/_authed/accounts.tsx; cat
+      src/components/ui/select.tsx src/components/ui/action-buttons.tsx | head
+      -80)
+  ⎿  import { createFileRoute } from "@tanstack/react-router";
+     import { useServerFn } from "@tanstack/react-start";
+     import { useQuery, useMutation, useQueryClient } from "@tanstack/react
+     … +401 lines (ctrl+o to expand)
+
+⏺ Now the transaction write points, so I know where to hook the alert check:
+
+⏺ Bash(sed -n 1060,1100p src/server/imports.functions.ts; echo ----; sed -n
+      505,540p src/server/receipts.functions.ts; echo ----; sed -n 270,300p
+      src/server/categoriza…)
+  ⎿    }
+
+       const persistController = abortControllers.get(String(requestId));
+     … +220 lines (ctrl+o to expand)
+
+❯ /ask-matt i have a TASK.md in the dir to implement, some additional           
+instructions are on the download files under Proxet test_ Finance Tracker —     
+take-home task (1) (1), what are the skill set and order I should use to        
+implement it?                                                                   
+
+  Read 1 file, listed 1 directory (ctrl+o to expand)
+
+⏺ Bash(cd ~/.claude/skills && for s in grill-with-docs setup-matt-pocock-skills
+      to-spec to-tickets implement implement-spec tdd code-review retro; do echo
+      "===== $s";…)
+  ⎿  ===== grill-with-docs
+     ---
+     name: grill-with-docs
+     … +394 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /Users/jordanboaz/code
+
+⏺ Here's the order I'd use. I read the PDF and the SKILL.md for each skill
+  below. The PDF adds no requirements beyond TASK.md. What it does say is that
+  the interviewers will grade how you work: they'll ask you to walk through your
+  agent conversations, explain the design, and demo the feature. So pick a flow
+  that leaves visible artifacts behind (a glossary, ADRs, a spec, tickets,
+  reviews).
+
+  Recommended order
+
+  0. /setup-matt-pocock-skills (once, about 2 minutes)
+  to-spec, to-tickets, implement and code-review all expect a configured issue
+  tracker. Choose local markdown (.scratch/budgets/) unless you want to push
+  issues to the GitHub remote. Local markdown keeps everything in the repo where
+  you can show it.
+
+  1. /grill-with-docs, in this same session
+  This runs the interview and writes GLOSSARY.md and ADRs as it goes. Four
+  decisions are already settled in this conversation, so tell it to record them
+  rather than re-ask:
+  - Each budget has its own currency and counts only spending from accounts in
+    that currency.
+  - Only the transaction's category counts; receipt-item categories are ignored.
+  - Alerts are checked after every transaction write, plus the hourly
+    maintenance sweep. A (budget, month) ledger table guarantees at most one
+    email.
+  - After a downgrade, existing budgets are kept and only creating new ones is
+    blocked, the same as the account limit.
+
+  Questions it should still cover:
+  - Which timezone defines "this month"? The AI quota uses UTC.
+  - Can one category have two budgets?
+  - If the user raises the limit after an alert, can they get a second email
+    that month?
+  - What happens to a budget when its category is deleted?
+  - Should alerts go only to users with a verified email?
+  - Should budgets appear on the billing page's usage list?
+
+  2. Prototype detour: skip it. The data model and UI are simple enough to
+  decide in conversation.
+
+  3. /to-spec, then /to-tickets, still in the same window
+  This counts as a multi-session build. It touches a migration, a server module,
+  the UI and nav, emails from about seven transaction write paths, billing
+  gating, and compliance (export plus hard delete). Writing tickets also gives
+  you something concrete to walk the interviewers through. A likely breakdown:
+  1. Schema, migration, and a budgets.server.ts that computes spending
+     (subcategories included, expenses only, current month). Unit tests.
+  2. Budgets page, nav entry, and create/edit/delete, with E2E tests.
+  3. Free-plan limit of 3 budgets and the upgrade hint, with an entry in billing
+     usage.
+  4. Over-budget email: the ledger table, the hooks after transaction writes,
+     and the sweep backstop.
+  5. Compliance: budgets in the export zip and in hardDeleteUser, and cleanup
+     when a category is deleted.
+
+  4. /implement once per ticket, /clearing between tickets
+  Each run drives /tdd and finishes with /code-review. Use this rather than
+  /implement-spec: every ticket edits schema.ts, en.json and the drizzle
+  migrations, so parallel worktrees would hit merge conflicts. Doing one ticket
+  at a time is also easier to narrate in the interview. CLAUDE.md requires pnpm 
+  run check after each piece of work, including E2E tests for every user-facing
+  feature.
+
+  5. /pr if you open a pull request, for the description and the before/after
+  evidence.
+
+  6. /retro in the last session, before you clear.
+
+  Things to watch
+
+  - Keep your history. .gitignore excludes .claude/ and .agents/. The PDF asks
+    you to keep session history and agent config, so either remove those entries
+    or export the sessions before the interview.
+  - No e2e skill installed. CLAUDE.md says "use your e2e writing skill", but
+    none is installed. Copy the patterns in tests/e2e/fixtures.ts and
+    billing.spec.ts (the /test-set-plan and /test-emails routes) instead.
+  - Context budget. This session has already spent a fair amount of context on
+    exploration. If it gets close to the limit before /to-tickets, run /compact
+    after the grilling.
+
+✻ Brewed for 32s · done 10:30 AM
+
+※ recap: You're building the monthly category Budgets feature from TASK.md, and I've recommended a skill order for it. Next, run /setup-matt-pocock-skills, then /grill-with-docs in this session so it records the four decisions we already made. (disable recaps in /config)
+
+❯ /setup-matt-pocock-skills                                                     
+
+⏺ Bash(cd /Users/jordanboaz/code/interview-agentic-task-finance-tracker && git
+      remote -v; grep -n "Agent skills" CLAUDE.md AGENTS.md; ls GLOSSARY.md
+      GLOSSARY-MAP.md CO…)
+  ⎿  origin
+     https://github.com/Railsreactor/interview-agentic-task-finance-t
+     racker (fetch)
+     origin
+     https://github.com/Railsreactor/interview-agentic-task-finance-t
+     … +16 lines (ctrl+o to expand)
+
+⏺ The repo's remote points at the interviewer's GitHub org, not yours, and there
+  are no existing agent docs, glossary or ADRs, so this is a fresh
+  single-context setup. I'll set that up without asking, and I'm skipping the
+  issue tracker for now since filing on their repo would be wrong. · summary
+
+⏺ User answered Claude's questions:
+  ⎿  · Where should the engineering skills (to-spec, to-tickets, implement, 
+     code-review) track issues for this repo? The git remote is the 
+     interviewer's GitHub org (Railsreactor). → Local markdown (Recommended)
+
+⏺ User answered Claude's questions:
+  ⎿  · Section B — the triage skill is installed. Keep the default triage labels
+     (needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix)? → 
+     Yes, keep defaults (Recommended)
+⏺ Bash(cd ~/.claude/skills/setup-matt-pocock-skills && for f in
+      issue-tracker-local.md triage-labels.md domain.md; do echo "===== $f"; cat
+      $f; done)
+  ⎿  ===== issue-tracker-local.md
+     # Issue tracker: Local Markdown
+     … +96 lines (ctrl+o to expand)
+  ⎿  Shell cwd was reset to /Users/jordanboaz/code
+
+  Read 1 file (ctrl+o to expand)
+  ⎿  Loaded interview-agentic-task-finance-tracker/CLAUDE.md
+
+⏺ Sections A and B are settled: local markdown tracker, default labels. Section
+  C is single-context with no question needed. Here's what I'll write. Nothing 
+  has been written yet, so edit anything before I do.
+
+  1. Append to CLAUDE.md, and the same block to AGENTS.md:
+  ## Agent skills
+
+  ### Issue tracker
+
+  Local markdown: specs and tickets live under `.scratch/<feature>/`. See
+  `docs/agents/issue-tracker.md`.
+
+  ### Triage labels
+
+  Default five roles (needs-triage, needs-info, ready-for-agent,
+  ready-for-human, wontfix), recorded as a `Status:` line in each ticket file.
+  See `docs/agents/triage-labels.md`.
+
+  ### Domain docs
+
+  Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See
+  `docs/agents/domain.md`.
+  The skill's rule is to edit CLAUDE.md only. Here the README says CLAUDE.md and
+  AGENTS.md are identical, so I'd add the block to both to keep them in sync.
+
+  2. docs/agents/issue-tracker.md, copied from the skill's template without
+  changes:
+  - One directory per feature at .scratch/<feature-slug>/, with the spec in
+    spec.md.
+  - One file per ticket at issues/NN-<slug>.md.
+  - Each ticket has a Status: line and a Blocked by: line, and comments go under
+    ## Comments.
+
+  3. docs/agents/triage-labels.md: the role-to-label table, with every label
+  string equal to its role name.
+
+  4. docs/agents/domain.md: the consumer rules. Agents read GLOSSARY.md and
+  docs/adr/ before exploring and use the glossary's terms. Neither file exists
+  yet; /grill-with-docs creates them when the first term or decision gets
+  resolved.
+
+  One thing to decide for the interview: .gitignore excludes .claude and
+  .agents, but not .scratch/ or docs/, so the spec and tickets will be
+  committed. That's probably what you want, because they're evidence of your
+  workflow. Do you also want me to remove .claude and .agents from .gitignore so
+  your skills and settings get committed too? The PDF suggests doing that.
+
+  Reply "go" to write this as shown, or tell me what to change.
+
+❯ /usage 
+  ⎿  Settings dialog dismissed
+
+✻ Baked for 32s · done 10:37 AM
+
+❯ /grill-with-docs                                                              
+
+⏺ Bash(cd /Users/jordanboaz/code/interview-agentic-task-finance-tracker && ls
+      docs docs/agents 2>&1; grep -n "Agent skills" AGENTS.md; git status
+      --short)
+  ⎿  ls: docs: No such file or directory
+     ls: docs/agents: No such file or directory
+     119:## Agent skills
+     … +3 lines (ctrl+o to expand)
+
+⏺ Skill(grilling)
+  ⎿  Successfully loaded skill
+
+⏺ Skill(domain-modeling)
+  ⎿  Successfully loaded skill
+  ⎿  15 skills available
+  ⎿  15 skills available
+
+⏺ Since we're working inside the repo, I'll use its own versions of both skills.
+
+⏺ Skill(interview-agentic-task-finance-tracker:grilling)
+  ⎿  Successfully loaded skill
+
+⏺ Skill(interview-agentic-task-finance-tracker:domain-modeling)
+  ⎿  Successfully loaded skill
+
+⏺ Bash(cd /Users/jordanboaz/code/interview-agentic-task-finance-tracker/.claude/
+      skills/domain-modeling && cat GLOSSARY-FORMAT.md ADR-FORMAT.md; grep -rn
+      "isEmailVerifi…)
+  ⎿  # GLOSSARY.md Format
+
+     ## Structure
+     … +114 lines (ctrl+o to expand)
+
+⏺ I'll start GLOSSARY.md with the terms we've already settled: budget, spending,
+  and the alert.
+
+⏺ Write(GLOSSARY.md)
+  ⎿  Wrote 21 lines to GLOSSARY.md
+      1 # Finance Tracker
+      2 
+      3 A personal finance tracker: users record transactions across thei
+        r accounts, organise them into categories, and plan spending agai
+        nst monthly budgets.
+      4 
+      5 ## Budgets
+      6 
+      7 **Budget**:
+      8 A monthly spending limit a user sets on one category, in one curr
+     … +14 lines (ctrl+o to expand)
+
+⏺ I've created GLOSSARY.md with the four terms you already settled: Budget,
+  Limit, Spending and Budget alert.
+
+  These are already settled from earlier, so I won't ask them again:
+  - Currency: each budget has one currency.
+  - Categories: only the transaction's own category counts, never receipt-item
+    categories.
+  - When alerts are checked: after every transaction write, plus in the hourly
+    sweep.
+  - Downgrade: existing budgets are kept and only creating new ones is blocked.
+
+  Here's round 1. It covers every question whose prerequisites are already
+  settled.
+
+  ❓ Q1 - What "this month" means: Each transaction has a plain calendar date
+  with no time attached. The scan quota in AI usage defines a month as the UTC
+  calendar month. Should a budget's month be the transactions dated in the
+  current calendar month, with "current" decided by the server's UTC date? The
+  alternative is following the user's timezone, but the app stores no user
+  timezone.
+
+  ➡️ Yes. UTC calendar month, matching the scan quota. Near midnight on the last
+  day of a month, users east of UTC may briefly see the previous month. That's
+  acceptable.
+
+  ---
+
+  ❓ Q2 - How many budgets per category: Budgets have a currency. Should a user
+  be allowed one budget per (category, currency) pair, so "Groceries PLN" and
+  "Groceries USD" can coexist, with each pair counting toward the free limit of
+  3? The stricter alternative is one budget per category, full stop.
+
+  ➡️ Yes, one per (category, currency). It's the honest model for users with
+  accounts in more than one currency, and anyone with a single currency never
+  notices.
+
+  ---
+
+  ❓ Q3 - Overlapping budgets: Should a user be able to budget a parent and a
+  child at the same time, say "Food" at 2000 and "Food › Restaurants" at 500? A
+  100 restaurant expense would then count toward both, and the two are tracked
+  and alerted independently.
+
+  ➡️ Yes, allow it. Each budget answers its own question, and no double-counting
+  happens across budgets because they're never summed.
+
+  ---
+
+  ❓ Q4 - When the category changes: Category deletion has no cascade. It also
+  deletes every descendant category, and it can move their transactions to
+  another category.
+  - (a) If a budgeted category is deleted, directly or because its parent was
+    deleted, should its budget be deleted with it?
+  - (b) If a category is moved under a different parent, should budgets just
+    reflect the new tree with no stored state to fix, since spending is computed
+    live from the current tree?
+
+  ➡️ Yes to both. Deleting the category deletes its budgets. Moving a category
+  re-scopes budgets automatically.
+
+  ---
+
+  ❓ Q5 - What counts as over budget: Is a budget over only when spending is
+  strictly greater than the limit? Exactly at the limit would show as "0 left"
+  and not trigger an alert.
+
+  ➡️ Yes, strictly greater.
+
+  ---
+
+  ❓ Q6 - Strict one-per-month alerts: A budget goes over and sends its alert.
+  The user then raises the limit and goes over again in the same month. Should
+  there be no second email? The cap is one alert per budget per month, whatever
+  happens to the limit.
+
+  ➡️ Yes, strict. It matches the acceptance criterion word for word and avoids
+  spamming the user.
+
+  ---
+
+  ❓ Q7 - Who gets alerts: Users can have no email (legacy accounts) or an
+  unverified one. Receipt scanning and AI categorisation are already restricted
+  to verified users.
+  - Should alerts go only to users with a verified email? Spending amounts sent
+    to a mistyped address would leak financial data.
+  - When we skip an unverified user, should that skip not use up the month's
+    alert? Then if they verify mid-month, the next check sends the alert.
+
+  ➡️ Yes to both. Verified emails only, and a skip doesn't count as sent.
+
+  ---
+
+  ❓ Q8 - What the alert says: Should the email name the category and show the
+  limit, the spending and the overshoot, with a link to /budgets? Logs stay free
+  of financial content, as the compliance code requires, but the email itself
+  carries amounts.
+
+  ➡️ Yes, for example "Groceries: spent 1,250.00 PLN of 1,000.00 PLN (250.00
+  over)", plus the link. The user asked to be told, so the amounts are the
+  useful part.
+
+  ---
+
+  ❓ Q9 - Already over when created: The user creates a 500 budget in a month
+  where they've already spent 800, or lowers a limit below current spending.
+  Should that send the alert too, picked up by the next check? Every check
+  simply asks "over and not yet alerted this month?".
+
+  ➡️ Yes. The rule stays simple and consistent, and there's still only ever one
+  email.
+
+  ---
+
+  ❓ Q10 - Backdated transactions: A transaction dated last month pushes last
+  month's spending over the limit. Should only the current month ever produce
+  alerts and appear on the page, with past months left alone?
+
+  ➡️ Yes, current month only. The page has no month picker or history in this
+  scope.
+
+  ---
+
+  ❓ Q11 - Budget created mid-month: The user creates a budget on the 20th.
+  Should it count the whole calendar month's spending, including the 1st to the
+  19th?
+
+  ➡️ Yes, the whole month. That's what "spent this month" means, and it needs no
+  stored start date.
+
+  ---
+
+  ❓ Q12 - Limit input and currency choice:
+  - Should the limit be a positive amount, greater than 0 and stored in minor
+    units like all other money, entered as a decimal and parsed with
+    parseAmountToMinor?
+  - Should the currency be chosen from the currencies of the user's existing
+    accounts, defaulting to the first one?
+  - Once a budget is created, should its currency be fixed, so the edit dialog
+    changes only the limit, as TASK.md describes?
+
+  ➡️ Yes to all three. To change currency, the user removes the budget and adds
+  a new one.
+
+  ---
+
+  ❓ Q13 - Free limit config and where it shows: Should the free-plan limit be
+  an env setting, BILLING_FREE_MAX_BUDGETS defaulting to 3, read through
+  getEntitlements as a maxBudgets field? And should it show in two places:
+  - on the billing page's usage list, as "2 of 3 budgets" or "unlimited";
+  - on the Budgets page, as an upgrade hint when a free user tries to add a
+    fourth budget?
+
+  ➡️ Yes. It mirrors maxAccounts exactly, which is the codebase's existing
+  pattern for plan gating and its existing upsell surface.
+
+  ---
+
+  ❓ Q14 - Data rights: Following "same compliance requirements as the rest",
+  should budgets and their alert records be handled like all other user data?
+  - included in the export zip, as export.json plus a budgets.csv;
+  - removed by the account hard delete;
+  - covered by the ownership checks (OWNED_TABLES).
+
+  ➡️ Yes, all three.
+
+  ---
+
+  A note from setup: the Agent skills block you pasted into CLAUDE.md and
+  AGENTS.md points at docs/agents/*.md, but those files don't exist yet. I can
+  write them from the templates whenever you like. It doesn't block the
+  grilling.
+
+✻ Cogitated for 1m 2s · done 10:41 AM
+
+❯ /usage 
+  ⎿  Settings dialog dismissed
+
+❯ q1 -- suggestion accepted. q2 Yes, one per (category, currency). It's the     
+  honest model for users with accounts in more than one currency, and anyone    
+  with a single currency never notices.. q3 Yes, allow it. Each budget answers  
+  its own question, and no double-counting happens across budgets because       
+  they're never summed. q4a, yes, shoukd be deleted. q4b yes. q5 yes. q6 yes.   
+  q7 yes. q8 yes. q9 no, the email should only be sent once a new transaction   
+  happens, not after setting the budget. q10 yes. q11 yes. q12 yess to all, and 
+  the user can determine the budget currency on creation only, defaulting to    
+  its default config. q13 yes. q14 yes all three                                
+
+⏺ Update(GLOSSARY.md)
+  ⎿  Added 8 lines
+      16  The total of expense transactions (money going out) in a budget
+          's category tree, in the budget's currency. Income and refunds 
+          never reduce it.
+      17  _Avoid_: Net spend, outflow, expenses (when meaning the budget 
+          figure)
+      18  
+      19 +**Budget month**:                                              
+      20 +The calendar month (UTC) a budget's spending is measured over. 
+         +Every budget starts again from zero on the 1st; only the curren
+         +t month is tracked.                                            
+      21 +_Avoid_: Period, cycle, billing period                         
+      22 +                                                               
+      23 +**Over budget**:                                               
+      24 +A budget whose spending this budget month is strictly greater t
+         +han its limit. Spending exactly equal to the limit is not over.
+      25 +_Avoid_: Exceeded, overspent, breached                         
+      26 +                                                               
+      27  **Budget alert**:
+      28  The email a user receives when a budget goes over its limit. A 
+          budget sends at most one per month.
+      29  _Avoid_: Notification, warning, over-budget email
+
+⏺ I've recorded every answer and added Budget month and Over budget to
+  GLOSSARY.md.
+
+  Your "no" on Q9 changes the alert design. If an alert may only follow a
+  transaction, the hourly sweep can't stay as a backstop: it has no transaction
+  to react to, so it would email a budget that was set while already over. Round
+  2 covers what depends on that change.
+
+  ❓ Q1 - Which transaction changes can send an alert: After one of these
+  changes, the app checks the user's budgets and emails any that are over and
+  haven't been alerted this month:
+  - (a) New transactions only: manual create, CSV import, or a receipt scan that
+    creates a transaction.
+  - (b) Any change that can add spending to a budget: everything in (a), plus
+    editing a transaction's amount, date or category, re-categorising (a rule
+    apply or AI categorise), and reassigning transactions when a category is
+    deleted. Deleting a transaction never sends an alert.
+
+  Here's the case that separates them. A user re-categorises five transactions
+  into Groceries and pushes it to 1,200 of 1,000. Under (a) there's no email
+  until their next new transaction.
+
+  ➡️ (b). The user really did go over budget at that moment, and each of those
+  changes is a transaction change rather than a budget change. Budget create and
+  edit still never send an alert, as you decided in Q9.
+
+  ---
+
+  ❓ Q2 - Already over, then a new transaction: Following on from your Q9
+  answer, take a budget created at 500 when 800 has already been spent. No email
+  goes out at creation. Then the user adds a 10 PLN coffee. Should the coffee
+  send the alert, since the budget is over and hasn't been alerted this month?
+
+  ➡️ Yes. The rule becomes "a transaction change that leaves a budget over sends
+  its alert if it hasn't sent one this month". It doesn't have to be the
+  transaction that crossed the line. That needs no before/after snapshot, and it
+  still caps alerts at one per month.
+
+  ---
+
+  ❓ Q3 - Drop the sweep and retry on the next transaction: Should we drop the
+  hourly backstop? Instead, the check would run inside the transaction-change
+  request. A failed send is logged but doesn't fail the change. An alert is
+  marked as sent only after the email goes out, so a failure gets retried on the
+  user's next transaction change.
+
+  ➡️ Yes. It's the only design consistent with Q9. The cost is that if the email
+  provider is down, the alert waits for the next transaction, and I think
+  that's acceptable.
+
+  ---
+
+  ❓ Q4 - What the default currency is: On creation, which currency should the
+  picker preselect?
+  - (a) The app-wide default, PLN, which is what new accounts default to.
+  - (b) The currency of the user's account with the most transactions, so PLN
+    for most users and USD for someone whose main account is in USD.
+
+  The picker would still list only currencies the user's accounts actually have.
+  A user with no accounts couldn't create a budget, and would see an empty
+  state saying "add an account first".
+
+  ➡️ (b), falling back to PLN when it's a tie. If (a) is what you meant by "its
+  default config", say so.
+
+  ---
+
+  ❓ Q5 - ADR for per-currency budgets: Budgets scoped to a currency, with no FX
+  conversion, meets all three tests for an ADR:
+  - It's hard to reverse: it's in the schema, the uniqueness rule and how the
+    limit counts.
+  - It would surprise a future reader, who might ask why Groceries can't simply
+    sum everything.
+  - It was a real trade-off against summing everything or converting with
+    exchange rates.
+
+  Should I record it as docs/adr/0001-budgets-are-per-currency.md? The
+  transaction-only alert rule is a weaker candidate. Once it's in the glossary
+  it isn't surprising, so I'd skip an ADR for it.
+
+  ➡️ Yes for the currency ADR, no for the alert rule.
+
+✻ Brewed for 35s · done 10:50 AM
+
+❯ ok, so lets trackback on q9 decision so we avoid new questionary              
+
+⏺ Reverting Q9 makes round 2 moot. With an alert on any check, the original
+  design stands without new questions. For the two items left open in round 2,
+  I'm using my recommended defaults; tell me if either is wrong.
+
+⏺ Bash(mkdir -p
+      /Users/jordanboaz/code/interview-agentic-task-finance-tracker/docs/adr &&
+      cat >
+      /Users/jordanboaz/code/interview-agentic-task-finance-tracker/docs/adr/…)
+  ⎿  Created docs/adr/0001-budgets-are-per-currency.md (+8 -0)
+      1 +# Budgets are scoped to one currency                            
+      2 +                                                                
+      3 +Accounts can hold different currencies, and the app has no excha
+        +nge rates. A budget therefore has its own currency, fixed at cre
+        +ation, and only counts spending from accounts in that currency; 
+        +a user may hold one budget per (category, currency) pair. We rej
+        +ected summing amounts across currencies (silently wrong for mult
+        +i-currency users) and converting with FX rates (new external dep
+        +endency and rate-staleness questions for a first version).      
+      4 +                                                                
+      5 +## Consequences                                                 
+      6 +                                                                
+      7 +- "Groceries PLN" and "Groceries USD" are two budgets and count 
+        +as two toward the free-plan limit.                              
+      8 +- Changing a budget's currency means removing it and adding a ne
+        +w one.                                                          
+⏺ Update(GLOSSARY.md)
+  ⎿  Added 1 line, removed 1 line
+      25  _Avoid_: Exceeded, overspent, breached
+      26  
+      27  **Budget alert**:
+      28 -The email a user receives when a budget goes over its limit. A 
+         -budget sends at most one per month.                            
+      28 +The email a user receives when a budget is found over budget, h
+         +owever it got there (new spending, or a limit set below what wa
+         +s already spent). A budget sends at most one per budget month, 
+         +and only to a verified email address.                          
+      29  _Avoid_: Notification, warning, over-budget email
+
+⏺ I've switched Q9 back to the original rule, and nothing new needs asking. I
+  wrote docs/adr/0001-budgets-are-per-currency.md and updated the Budget alert
+  entry in GLOSSARY.md to match.
+
+  Two open items I settled with my recommended defaults:
+  - Default currency: the picker preselects the currency of your account with
+    the most transactions, and uses PLN if there's a tie. It only lists
+    currencies your accounts actually hold.
+  - Alert ADR: I didn't write one. Once the glossary defines the rule it isn't
+    surprising, so it fails one of the three tests.
+
+  That empties the frontier. Here's the full design to confirm.
+
+  The budget itself
+  - One budget per category per currency, so "Groceries PLN" and "Groceries USD"
+    can both exist. You set the currency when you create the budget and can't
+    change it afterwards. Edit changes only the limit, which must be greater
+    than 0.
+  - A budget can't be created until you have at least one account.
+  - A budget covers its category and all subcategories. Moving a category under
+    a new parent automatically changes what its budgets cover. Deleting a
+    category, directly or through its parent, deletes its budgets.
+  - A parent and its child can both have budgets. A transaction then counts
+    toward both, and each budget is tracked separately.
+
+  How spending is measured
+  - Spending counts only money going out, in the budget's currency, and only
+    from the transaction's own category. Receipt line items are ignored. Income
+    and refunds never reduce it.
+  - The month is the current UTC calendar month. A budget created mid-month
+    still counts the whole month, and only the current month is shown.
+  - A budget is over budget only when spending is strictly greater than the
+    limit. Spending exactly equal to the limit shows "0 left".
+
+  Alerts
+  - Every check emails each budget that is over and hasn't been alerted this
+    month. It doesn't matter how the budget got there: new spending, or a limit
+    set below what's already spent.
+  - Checks run after every transaction change except delete: create, import,
+    receipt scan, edit, recategorise, and reassignment when a category is
+    deleted. They also run after a budget is created or its limit changes. The
+    existing hourly maintenance loop runs one as a backstop.
+  - An alert counts as sent only once the email has actually gone out, so a
+    failed send gets retried by the next check. Unverified users are skipped and
+    keep their alert for later.
+  - The email names the category, the limit, the spending and how far over it
+    is, and links to /budgets. Logs never contain amounts.
+  - Strictly one alert per budget per month. Raising the limit doesn't reset it.
+
+  Plans and data rights
+  - Free users get 3 budgets and Pro users unlimited. The 3 comes from
+    BILLING_FREE_MAX_BUDGETS and is exposed as maxBudgets through
+    getEntitlements.
+  - The billing page shows "N of 3 budgets", and the Budgets page shows an
+    upgrade hint when you hit the limit.
+  - After a downgrade, every existing budget keeps working; only creating new
+    ones is blocked.
+  - Budgets and their alert records are included in the export zip, removed by
+    account hard delete, and covered by the ownership checks.
+
+  If this matches what you have in mind, the next step is /to-spec, run in this
+  same session.
+
+✻ Sautéed for 22s · done 10:51 AM
+
+❯ /to-spec                                                                      
+
+⏺ Before the spec, one setup gap. /to-spec publishes to the tracker described in
+  docs/agents/issue-tracker.md, and that file was never written; you added only
+  the CLAUDE.md block. We already agreed on its contents (local markdown,
+  default labels, single context), so I'll write the three files from the
+  templates now.
+
+⏺ Bash(cd /Users/jordanboaz/code/interview-agentic-task-finance-tracker && mkdir
+      -p docs/agents && cp
+      ~/.claude/skills/setup-matt-pocock-skills/issue-tracker-local.md…)
+  ⎿  docs/adr:
+     0001-budgets-are-per-currency.md
+     … +44 lines (ctrl+o to expand)
+  ⎿  Created docs/agents/domain.md (+51 -0)
+       1 +# Domain Docs                                                  
+       2 +                                                               
+       3 +How the engineering skills should consume this repo's domain do
+         +cumentation when exploring the codebase.                       
+       4 +                                                               
+       5 +## Before exploring, read these                                
+       6 +                                                               
+       7 +- **`GLOSSARY.md`** at the repo root, or                       
+       8 +- **`GLOSSARY-MAP.md`** at the repo root if it exists: it point
+         +s at one `GLOSSARY.md` per context. Read each one relevant to t
+         +he topic.                                                      
+       9 +- **`docs/adr/`**: read ADRs that touch the area you're about t
+         +o work in. In multi-context repos, also check `src/<context>/do
+         +cs/adr/` for context-scoped decisions.                         
+      10 +                                                               
+      11 +If any of these files don't exist, **proceed silently**. Don't 
+         +flag their absence; don't suggest creating them upfront. The `/
+         +domain-modeling` skill (reached via `/grill-with-docs` and `/im
+         +prove-codebase-architecture`) creates them lazily when terms or
+         + decisions actually get resolved.                              
+      12 +                                                               
+      13 +## File structure                                              
+      14 +                                                               
+      15 +Single-context repo (most repos):                              
+      16 +                                                               
+      17 +```                                                            
+      18 +/                                                              
+      19 +├── GLOSSARY.md                                                
+      20 +├── docs/adr/                                                  
+      21 +│   ├── 0001-event-sourced-orders.md                           
+      22 +│   └── 0002-postgres-for-write-model.md                       
+      23 +└── src/                                                       
+      24 +```                                                            
+      25 +                                                               
+      26 +Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
+      27 +                                                               
+      28 +```                                                            
+      29 +/                                                              
+      30 +├── GLOSSARY-MAP.md                                            
+      31 +├── docs/adr/                          ← system-wide decisions 
+      32 +└── src/                                                       
+      33 +    ├── ordering/                                              
+      34 +    │   ├── GLOSSARY.md                                        
+      35 +    │   └── docs/adr/                  ← context-specific decis
+         +ions                                                           
+      36 +    └── billing/                                               
+      37 +        ├── GLOSSARY.md                                        
+      38 +        └── docs/adr/                                          
+      39 +```                                                            
+      40 +                                                               
+     … 11 more lines (ctrl+o to expand)
+  ⎿  Created docs/agents/issue-tracker.md (+30 -0)
+       1 +# Issue tracker: Local Markdown                                
+       2 +                                                               
+       3 +Issues and specs for this repo live as markdown files in `.scra
+         +tch/`.                                                         
+       4 +                                                               
+       5 +## Conventions                                                 
+       6 +                                                               
+       7 +- One feature per directory: `.scratch/<feature-slug>/`        
+       8 +- The spec is `.scratch/<feature-slug>/spec.md`                
+       9 +- Implementation issues are one file per ticket at `.scratch/<f
+         +eature-slug>/issues/<NN>-<slug>.md`, numbered from `01`, never 
+         +a single combined tickets file                                 
+      10 +- Triage state is recorded as a `Status:` line near the top of 
+         +each issue file (see `triage-labels.md` for the role strings)  
+      11 +- Comments and conversation history append to the bottom of the
+         + file under a `## Comments` heading                            
+      12 +                                                               
+      13 +## When a skill says "publish to the issue tracker"            
+      14 +                                                               
+      15 +Create a new file under `.scratch/<feature-slug>/` (creating th
+         +e directory if needed).                                        
+      16 +                                                               
+      17 +## When a skill says "fetch the relevant ticket"               
+      18 +                                                               
+      19 +Read the file at the referenced path. The user will normally pa
+         +ss the path or the issue number directly.                      
+      20 +                                                               
+      21 +## Wayfinding operations                                       
+      22 +                                                               
+      23 +Used by `/wayfinder`. The **map** is a file with one **child** 
+         +file per ticket.                                               
+      24 +                                                               
+      25 +- **Map**: `.scratch/<effort>/map.md` (the Notes / Decisions-so
+         +-far / Fog body).                                              
+      26 +- **Child ticket**: `.scratch/<effort>/issues/NN-<slug>.md`, nu
+         +mbered from `01`, with the question in the body. A `Type:` line
+         + records the ticket type (`research`/`prototype`/`grilling`/`ta
+         +sk`); a `Status:` line records `claimed`/`resolved`.           
+      27 +- **Blocking**: a `Blocked by: NN, NN` line near the top. A tic
+         +ket is unblocked when every file it lists is `resolved`.       
+      28 +- **Frontier**: scan `.scratch/<effort>/issues/` for files that
+         + are open, unblocked, and unclaimed; first by number wins.     
+      29 +- **Claim**: set `Status: claimed` and save before any work.   
+      30 +- **Resolve**: append the answer under an `## Answer` heading, 
+         +set `Status: resolved`, then append a context pointer (gist + l
+         +ink) to the map's Decisions-so-far in `map.md`.                
+  ⎿  Created docs/agents/triage-labels.md (+15 -0)
+       1 +# Triage Labels                                                
+       2 +                                                               
+       3 +The skills speak in terms of five canonical triage roles. This 
+         +file maps those roles to the actual label strings used in this 
+         +repo's issue tracker.                                          
+       4 +                                                               
+       5 +| Label in mattpocock/skills | Label in our tracker | Meaning  
+         +                                |                              
+       6 +| -------------------------- | -------------------- | ---------
+         +------------------------------- |                              
+       7 +| `needs-triage`             | `needs-triage`       | Maintaine
+         +r needs to evaluate this issue  |                              
+       8 +| `needs-info`               | `needs-info`         | Waiting o
+         +n reporter for more information |                              
+       9 +| `ready-for-agent`          | `ready-for-agent`    | Fully spe
+         +cified, ready for an AFK agent  |                              
+      10 +| `ready-for-human`          | `ready-for-human`    | Requires 
+         +human implementation            |                              
+      11 +| `wontfix`                  | `wontfix`            | Will not 
+         +be actioned                     |                              
+      12 +                                                               
+      13 +When a skill mentions a role (e.g. "apply the AFK-ready triage 
+         +label"), use the corresponding label string from this table.   
+      14 +                                                               
+      15 +Edit the "Label in our tracker" column to match whatever vocabu
+         +lary you actually use.                                         
+
+⏺ I've written the three tracker files under docs/agents/, so the spec will go
+  to .scratch/budgets/spec.md with Status: ready-for-agent.
+
+  Before I write the spec, here are the test seams I'm proposing. Please confirm
+  or change them.
+
+  Seam 1 (primary): the budgets server module's public interface, unit-tested
+  against the in-memory PGlite database. This is one deep module that owns every
+  budget rule:
+  - Listing: list a user's budgets for the current month, with limit, spending,
+    remaining and over budget.
+  - Changes: create, change the limit, remove, with ownership checks and the
+    free-plan gate.
+  - Alerts: check budget alerts for a user.
+
+  Every rule that can be wrong sits behind this module:
+  - subcategories counting toward the parent's budget;
+  - spending only, with income and refunds excluded;
+  - currency scoping;
+  - month boundaries;
+  - the 3-budget free limit and keeping budgets after a downgrade;
+  - one alert per month, skipping unverified users, and retrying after a failed
+    send;
+  - deleting budgets when their category is deleted.
+
+  Tests pass an explicit now, the same way checkScanAllowed does in
+  billing.test.ts, so month boundaries are deterministic. Alerts are observed
+  through the existing test email capture, not by querying the alert table.
+  - Catches: every business rule.
+  - Misses: whether each transaction write path actually calls the alert check.
+
+  Seam 2: Playwright E2E through the UI. CLAUDE.md requires this for every
+  user-facing feature. It covers:
+  - the nav entry, plus add, edit and remove;
+  - the over-budget display;
+  - the free limit and upgrade hint, using /test-set-plan;
+  - one alert end to end, by creating a transaction in the UI that pushes a
+    budget over, then reading /test-emails.
+  - Catches: wiring, i18n, query invalidation, and one write path hooked end to
+    end.
+  - Misses: the other write paths (import, receipt scan, recategorise, category
+    reassignment). Those are one-line calls to the Seam 1 alert check. I'd cover
+    them by review rather than adding an E2E per path. Tell me if you want a
+    test per path.
+
+  Existing seams, extended rather than new:
+  - tests/compliance.test.ts: add a budget and an alert record to seedFullUser,
+    then assert they appear in the export zip and disappear after hard delete.
+  - tests/billing.test.ts: assert that entitlementsForPlan includes maxBudgets.
+
+  Do these seams match what you expect?
+
+✻ Cooked for 22s · done 10:52 AM
+
+❯ yes                                                                           
+
+⏺ Write(.scratch/budgets/spec.md)
+  ⎿  Wrote 232 lines to .scratch/budgets/spec.md
+      1 # Spec: Monthly category budgets
+      2 
+      3 Status: ready-for-agent
+      4 
+      5 Source: `TASK.md` (user story "Monthly category budgets"). Vocabu
+        lary: `GLOSSARY.md` (Budget, Limit, Spending, Budget month, Over 
+        budget, Budget alert). Decisions: `docs/adr/0001-budgets-are-per-
+        currency.md`.
+      6 
+      7 ## Problem Statement
+     … +225 lines (ctrl+o to expand)
+
+⏺ The spec is written to .scratch/budgets/spec.md, marked Status: 
+  ready-for-agent. It uses the glossary's terms and links to ADR 0001.
+
+  It has 65 user stories, grouped into:
+  - navigation and page
+  - creating, viewing, changing and removing budgets
+  - category changes
+  - budget alerts
+  - plans
+  - data rights and security
+  - non-regression
+
+  It also records every decision from the grilling session: the domain rules,
+  the alert design, the modules, and the schema.
+
+  Three things in it go beyond what we discussed explicitly:
+
+  - No double-sent alerts: before sending an alert, the check records a
+    "claimed" row for that budget and month. If a second check runs at the same
+    time, its claim fails and it sends nothing. If the email fails, the claim is
+    removed so a later check retries. This is the same pattern the Stripe
+    webhook ledger uses.
+  - Error codes: server functions return machine-readable error codes so the UI
+    can show localised messages: budget_limit_reached, budget_exists,
+    category_not_found, currency_unavailable, budget_not_found.
+  - Out of scope: the spec lists what we're not building, including budget
+    history, percentage warnings, a dashboard widget, opt-out of alerts, and MCP
+    exposure.
+
+  The spec, GLOSSARY.md, docs/adr/ and docs/agents/ aren't excluded by
+  .gitignore, so they'll be committed along with the feature.
+
+  The next step is /to-tickets in this same session. It splits the spec into
+  vertical-slice tickets with blocking edges.
+
+❯ /usage 
+  ⎿  Settings dialog dismissed
+
+✻ Churned for 1m 26s · done 10:55 AM
+
+❯ /to-tickets                                                                   
+
+⏺ I've broken the spec into six tickets, drafted from the spec and the code
+  we've already read. I found no prefactoring worth doing first: the budget gate
+  can sit alongside the existing account gate without changing it.
+
+  1. Budgets page: add a budget and see its progress
+     - Blocked by: none, can start immediately.
+     - What it delivers: the tracer bullet. It adds:
+       - the "Budgets" nav entry and the page, with empty and no-accounts
+         states;
+       - adding a budget for a category, currency and limit, with the currency
+         picker and default;
+       - the list showing limit, spending this budget month, what's left, and
+         the over-budget state.
+     - All the spending rules are live: subcategories at any depth, spending
+       only, budget currency, current UTC month, strict over-budget. Uniqueness
+       per (category, currency) and ownership checks are enforced.
+     - Includes the new migration for the budgets table, the core of the budgets
+       module, unit tests for spending and progress, and E2E tests for add and
+       display.
+  2. Change a budget's limit, remove it, and follow category changes
+     - Blocked by: 01.
+     - What it delivers:
+       - an edit dialog that changes only the limit;
+       - removing a budget after confirmation;
+       - deleting a category (directly or through its parent) removes its
+         budgets;
+       - moving a category re-scopes its budgets.
+     - Unit and E2E tests.
+  3. Free-plan budget allowance and upsell
+     - Blocked by: 01.
+     - What it delivers:
+       - BILLING_FREE_MAX_BUDGETS, default 3, exposed as maxBudgets in
+         entitlements;
+       - creating a fourth budget on Free is blocked, with a localised message
+         and an upgrade link;
+       - Pro is unlimited, and existing budgets are kept after a downgrade;
+       - the billing page shows "N of 3 budgets".
+     - Extends the billing and env unit tests, plus E2E via /test-set-plan.
+  4. Budget alert email on manual transaction changes
+     - Blocked by: 02, since the limit-change path has to exist before it can
+       call the check.
+     - What it delivers:
+       - the alert ledger migration and the alert check: claim first, retry on
+         failure, verified email only, strictly one per month;
+       - the localised email with category, limit, spending, overshoot and a
+         link;
+       - the check runs after manual transaction create and edit, and after
+         budget create and limit change.
+     - Unit tests for every alert rule, plus one E2E test: a UI transaction
+       pushes a budget over, /test-emails shows one email, and a second
+       transaction sends nothing.
+  5. Budget alerts from every other transaction write, plus the hourly backstop
+     - Blocked by: 04.
+     - What it delivers:
+       - the check also runs after CSV import, receipt scan, rule apply and AI
+         auto-categorise, and category-deletion reassignment, once per request
+         rather than per row;
+       - the hourly maintenance loop runs the check for every user with budgets,
+         isolated from the compliance sweep.
+     - Verified by review plus a unit test of the all-users check.
+  6. Budgets in data export and account deletion
+     - Blocked by: 04, which creates the alert records.
+     - What it delivers:
+       - budgets and budget alerts in export.json, plus a budgets.csv;
+       - account hard delete removes them;
+       - budgets added to the ownership registry.
+     - Extends the compliance unit tests' full-user seed.
+
+  After 01 lands, 02 and 03 can run in parallel. Then 04 follows, and 05 and 06
+  can run in parallel. Taking them one at a time, the order is 01 → 02 → 03 → 04
+  → 05 → 06.
+
+  Questions for you:
+  - Granularity: 01 is the biggest ticket, with the page, schema and spending
+    rules together. Should I keep it as one tracer bullet, or split it into
+    "schema and module with unit tests" and "page and E2E"? Splitting would make
+    it horizontal, so I'd keep it whole.
+  - Blocking edges: should 06 depend only on 01, adding budgets to export first
+    and alert records later in 04? I chose 04 so compliance is handled once.
+  - Merges or splits: 05 is small. Should I fold it into 04, or keep it
+    separate?
+
+✻ Cogitated for 18s · done 10:56 AM
+
+❯ where are the tickets saved and how can i reference them? answer for question 
+  1: yes. q2: leave it for 04; q3: keep separate                                
+
+⏺ Bash(mkdir -p /Users/jordanboaz/code/interview-agentic-task-finance-tracker/.s
+      cratch/budgets/issues && cd
+      /Users/jordanboaz/code/interview-agentic-task-finance-track…)
+  ⎿  01-budgets-page-add-and-progress.md
+     02-change-limit-remove-and-category-changes.md
+     03-free-plan-budget-allowance.md
+     … +3 lines (ctrl+o to expand)
+  ⎿  Created .scratch/budgets/issues/01-budgets-page-add-and-progress.md
+     (+22 -0)
+       1 +# 01: Budgets page — add a budget and see its progress         
+       2 +                                                               
+       3 +**What to build:** The tracer bullet for budgets. A signed-in u
+         +ser finds "Budgets" in the main navigation (after Categories), 
+         +opens the page, and adds a budget by choosing a category, a cur
+         +rency, and a monthly limit. The page then lists their budgets f
+         +or the current budget month, each showing its category (name an
+         +d colour), currency, limit, spending this budget month, what's 
+         +left, a progress indicator, and an unmistakable over-budget sta
+         +te (label, distinct colour, and "over by" amount instead of a n
+         +egative "left"). Spending follows every rule in the spec: the c
+         +ategory and all its subcategories at any depth, expense transac
+         +tions only (income and refunds ignored, never netted), only acc
+         +ounts in the budget's currency, only transactions dated in the 
+         +current UTC calendar month, uncategorised transactions never co
+         +unted. Over budget means spending strictly greater than the lim
+         +it.                                                            
+       4 +                                                               
+       5 +Spec: `.scratch/budgets/spec.md` (user stories 1–33, 62–63). Vo
+         +cabulary: `GLOSSARY.md`. Decision: `docs/adr/0001-budgets-are-p
+         +er-currency.md`.                                               
+       6 +                                                               
+       7 +**Blocked by:** None (can start immediately)                   
+       8 +                                                               
+       9 +**Status:** ready-for-agent                                    
+      10 +                                                               
+      11 +- [ ] New migration adds the budgets table: owner, category, cu
+         +rrency, limit in integer minor units, created/updated timestamp
+         +s; unique on (user, category, currency); indexed by user. Exist
+         +ing tables unchanged.                                          
+      12 +- [ ] Budgets server module exposes "list budgets with progress
+         +" for an injectable `now` (plus available currencies and the de
+         +fault currency) and "create budget"; server functions wrap them
+         + with zod validation and session user resolution.              
+      13 +- [ ] Create validates: limit is a positive amount parsed with 
+         +the existing money parser; category exists and is owned by the 
+         +user (a foreign category returns the same error as a missing on
+         +e); currency is one of the user's account currencies; no existi
+         +ng budget for that (category, currency). Errors return machine 
+         +codes (`category_not_found`, `currency_unavailable`, `budget_ex
+         +ists`) that the UI localises.                                  
+      14 +- [ ] Currency picker lists only the distinct currencies of the
+         + user's accounts and defaults to the currency of the account wi
+         +th the most transactions (PLN on a tie or with no transactions)
+         +.                                                              
+      15 +- [ ] Category picker shows the tree with subcategories visibly
+         + nested.                                                       
+      16 +- [ ] Empty state when there are no budgets; "add an account fi
+         +rst" state when the user has no accounts; loading indicator whi
+         +le fetching. The page shows which month it covers.             
+      17 +- [ ] Exactly-at-limit shows "0 left" and is not over budget.  
+      18 +- [ ] Parent and child budgets on the same tree coexist and are
+         + computed independently.                                       
+      19 +- [ ] All new UI text is in the Paraglide catalogue; the route 
+         +imports only server functions.                                 
+      20 +- [ ] Unit tests at the budgets module seam cover: descendants 
+         +at depth ≥2, income/refund exclusion, other-currency exclusion,
+         + other-month exclusion (both sides of a boundary with an explic
+         +it `now`), other-user isolation, uncategorised exclusion, exact
+         +ly-at-limit, over budget, overlap, uniqueness, foreign-category
+         + rejection, available and default currency.                    
+      21 +- [ ] E2E tests: nav entry, empty state, add a budget, spent/le
+         +ft after creating transactions in the UI, parent budget countin
+         +g a subcategory transaction, income not reducing spending, over
+         +-budget display, validation errors (empty/zero limit, duplicate
+         + budget).                                                      
+      22 +- [ ] `pnpm run check` passes.                                 
+  ⎿  Created
+     .scratch/budgets/issues/02-change-limit-remove-and-category-changes.md
+     (+18 -0)
+       1 +# 02: Change a budget's limit, remove it, and follow category c
+         +hanges                                                         
+       2 +                                                               
+       3 +**What to build:** A user can edit a budget, changing only its 
+         +limit (category and currency are fixed after creation), and rem
+         +ove a budget after confirming in a dialog. Removing a budget le
+         +aves transactions and categories untouched. Budgets also stay c
+         +onsistent with the category tree: deleting a category — directl
+         +y, or because its parent was deleted — removes every budget on 
+         +it, and moving a category under a different parent changes what
+         + budgets cover with no extra action.                           
+       4 +                                                               
+       5 +Spec: `.scratch/budgets/spec.md` (user stories 34–40).         
+       6 +                                                               
+       7 +**Blocked by:** 01 (Budgets page — add a budget and see its pro
+         +gress)                                                         
+       8 +                                                               
+       9 +**Status:** ready-for-agent                                    
+      10 +                                                               
+      11 +- [ ] Budgets module and server functions gain "change limit" a
+         +nd "remove budget", both ownership-checked in the same query; a
+         + foreign or missing budget returns `budget_not_found`.         
+      12 +- [ ] The edit dialog shows the budget's category and currency 
+         +read-only and validates the new limit like creation does.      
+      13 +- [ ] Remove goes through a confirmation dialog.               
+      14 +- [ ] Category deletion removes budgets on the deleted category
+         + and all its deleted descendants before the categories are dele
+         +ted (the schema has no cascades); existing category-deletion be
+         +haviour is otherwise unchanged.                                
+      15 +- [ ] Re-parenting a category re-scopes budgets: a parent budge
+         +t gains a moved-in child's spending and loses a moved-out child
+         +'s.                                                            
+      16 +- [ ] Unit tests at the budgets module seam: change limit, remo
+         +ve, budgets removed for deleted categories, re-parenting change
+         +s spending.                                                    
+      17 +- [ ] E2E tests: edit limit, remove with confirmation, deleting
+         + a budgeted category removes its budget from the Budgets page. 
+      18 +- [ ] Existing categories E2E and unit tests still pass; `pnpm 
+         +run check` passes.                                             
+  ⎿  Created .scratch/budgets/issues/03-free-plan-budget-allowance.md (+18 
+     -0)
+       1 +# 03: Free-plan budget allowance and upsell                    
+       2 +                                                               
+       3 +**What to build:** Free-plan users can hold up to 3 budgets; Pr
+         +o users unlimited. A free user trying to add a fourth budget se
+         +es a clear, localised message that the free plan is limited to 
+         +3 budgets, with a link to the billing page to upgrade. Users wh
+         +o downgraded with more than 3 budgets keep all of them working 
+         +— only creating new ones is blocked. The billing page's usage l
+         +ist shows budget usage against the plan's allowance. The allowa
+         +nce is operator-configurable, like the account allowance.      
+       4 +                                                               
+       5 +Spec: `.scratch/budgets/spec.md` (user stories 54–59).         
+       6 +                                                               
+       7 +**Blocked by:** 01 (Budgets page — add a budget and see its pro
+         +gress)                                                         
+       8 +                                                               
+       9 +**Status:** ready-for-agent                                    
+      10 +                                                               
+      11 +- [ ] New env setting `BILLING_FREE_MAX_BUDGETS`, default 3, va
+         +lidated as a positive integer like `BILLING_FREE_MAX_ACCOUNTS`;
+         + documented in the example env file.                           
+      12 +- [ ] Entitlements gain `maxBudgets` (a number on Free, `null` 
+         += unlimited on Pro); plan checks stay in the billing module, no
+         +ne in UI code.                                                 
+      13 +- [ ] A budget-allowance gate mirrors the account-allowance gat
+         +e: create returns `budget_limit_reached` with the `limit` when 
+         +at or above the allowance; existing budgets are never deleted o
+         +r locked.                                                      
+      14 +- [ ] The Budgets page shows the localised limit message with a
+         + link to the billing page when creation is blocked.            
+      15 +- [ ] Billing status and billing page show "N of M budgets" on 
+         +Free and "N budgets (unlimited)" on Pro.                       
+      16 +- [ ] Unit tests: entitlement mapping includes `maxBudgets`; en
+         +v default and validation; gate blocks the 4th on Free, allows o
+         +n Pro, keeps existing budgets after a downgrade.               
+      17 +- [ ] E2E tests (via the test plan override): Free blocked on t
+         +he 4th with upgrade link; Pro creates more than 3; billing page
+         + budget usage.                                                 
+      18 +- [ ] Existing billing tests still pass; `pnpm run check` passe
+         +s.                                                             
+  ⎿  Created .scratch/budgets/issues/04-budget-alert-on-manual-changes.md
+     (+19 -0)
+       1 +# 04: Budget alert email on manual transaction changes         
+       2 +                                                               
+       3 +**What to build:** When a budget is found over budget, the user
+         + gets one budget alert email for that budget in that budget mon
+         +th. The email names the category and shows the limit, the spend
+         +ing, and how much over, formatted in the budget's currency, wit
+         +h a link to the Budgets page. In this ticket the check runs aft
+         +er a manual transaction create or edit, and after a budget is c
+         +reated or its limit changes (so setting a limit below what's al
+         +ready spent also alerts). Alerts are strict: at most one per bu
+         +dget per month, regardless of limit changes; a new month allows
+         + a new alert. Only users with a verified email receive alerts, 
+         +and skipping an unverified user doesn't use up the month's aler
+         +t. A failed send is retried by a later check.                  
+       4 +                                                               
+       5 +Spec: `.scratch/budgets/spec.md` (user stories 41–53, 64; "Budg
+         +et alerts" implementation decisions).                          
+       6 +                                                               
+       7 +**Blocked by:** 02 (Change a budget's limit, remove it, and fol
+         +low category changes)                                          
+       8 +                                                               
+       9 +**Status:** ready-for-agent                                    
+      10 +                                                               
+      11 +- [ ] New migration adds the budget alerts ledger: budget, owne
+         +r, budget month (`YYYY-MM`), sent timestamp; unique on (budget,
+         + budget month). Removing a budget (ticket 02, and budgets remov
+         +ed by category deletion) also removes its alert records.       
+      12 +- [ ] Budgets module exposes "run alert check for a user" with 
+         +injectable `now`: for each over-budget budget not yet alerted t
+         +his month, claim the ledger row (insert, no-op on conflict), se
+         +nd, and release the claim if the send fails.                   
+      13 +- [ ] Unverified or missing email: skipped without claiming.   
+      14 +- [ ] Email subject and body come from the Paraglide catalogue;
+         + amounts use the existing money formatter; the link is built fr
+         +om the configured app base URL.                                
+      15 +- [ ] The check runs after the triggering write succeeds; its e
+         +rrors are caught and logged (ids and counts only) and never fai
+         +l the user's action.                                           
+      16 +- [ ] Wired into: manual transaction create, manual transaction
+         + edit, budget create, budget limit change. Not into transaction
+         + deletion.                                                     
+      17 +- [ ] Unit tests (observing captured emails, not the ledger): s
+         +ends once; no resend after raising the limit; resends in a new 
+         +month; sends when a limit is set below spending; unverified ski
+         +pped then sent after verification; retry after a failed send; p
+         +arent and child alert independently; earlier-month spending nev
+         +er alerts.                                                     
+      18 +- [ ] E2E test: a transaction created in the UI pushes a budget
+         + over → one alert in the test email capture with the expected c
+         +ategory and amounts; a second over-budget transaction → still o
+         +ne email.                                                      
+      19 +- [ ] `pnpm run check` passes.                                 
+  ⎿  Created .scratch/budgets/issues/05-alerts-from-all-writes-and-hourly-b
+     ackstop.md (+15 -0)
+       1 +# 05: Budget alerts from every other transaction write, plus th
+         +e hourly backstop                                              
+       2 +                                                               
+       3 +**What to build:** Budget alerts fire no matter how spending re
+         +aches a category, not just from manual edits. The alert check a
+         +lso runs after a CSV import, a receipt scan that creates or upd
+         +ates a transaction, applying a categorisation rule, AI auto-cat
+         +egorisation, and transaction reassignment during category delet
+         +ion. The existing hourly in-process maintenance loop runs the c
+         +heck for every user with at least one budget, so a missed or fa
+         +iled alert is caught later.                                    
+       4 +                                                               
+       5 +Spec: `.scratch/budgets/spec.md` ("Triggers" and "Maintenance l
+         +oop" implementation decisions).                                
+       6 +                                                               
+       7 +**Blocked by:** 04 (Budget alert email on manual transaction ch
+         +anges)                                                         
+       8 +                                                               
+       9 +**Status:** ready-for-agent                                    
+      10 +                                                               
+      11 +- [ ] Each listed write path calls the user's alert check once 
+         +after its write succeeds — once per request for bulk paths (imp
+         +ort, re-categorise), never per row; errors are caught and never
+         + fail the action.                                              
+      12 +- [ ] Budgets module exposes "run alert check for all users wit
+         +h budgets", used by the maintenance loop; it's isolated from th
+         +e compliance sweep so a failure in one doesn't skip the other. 
+         +TEST_MODE behaviour of the loop is unchanged (not armed).      
+      13 +- [ ] Unit test: the all-users check alerts over-budget budgets
+         + across several users and skips users without budgets.         
+      14 +- [ ] Per-path wiring verified in review (agreed: not separatel
+         +y tested).                                                     
+      15 +- [ ] All existing import, receipt, categorisation, and categor
+         +y E2E tests still pass; `pnpm run check` passes.               
+  ⎿  … 1 more file changed
+
+⏺ I've written all six tickets as you approved them. They live in your repo
+  under .scratch/budgets/:
+
+  .scratch/budgets/
+  ├── spec.md
+  └── issues/
+      ├── 01-budgets-page-add-and-progress.md
+      ├── 02-change-limit-remove-and-category-changes.md
+      ├── 03-free-plan-budget-allowance.md
+      ├── 04-budget-alert-on-manual-changes.md
+      ├── 05-alerts-from-all-writes-and-hourly-backstop.md
+      └── 06-budgets-in-export-and-deletion.md
+
+  Each ticket has a Blocked by: line, a Status: ready-for-agent line, acceptance
+  criteria as checkboxes, and pointers to the spec's user stories, GLOSSARY.md
+  and the ADR.
+
+  Referencing a ticket: pass its path when you run /implement, for example:
+
+  /implement .scratch/budgets/issues/01-budgets-page-add-and-progress.md
+
+  Saying "ticket 01" or "issue 03" also works. docs/agents/issue-tracker.md
+  tells the skills that a ticket number maps to the file with that number.
+
+  Order to work them:
+  1. 01 first. Nothing blocks it.
+  2. 02 and 03, which are both unblocked once 01 is done.
+  3. 04, after 02.
+  4. 05 and 06, which are both unblocked once 04 is done.
+
+  Working one at a time, go 01 to 06 in order.
+
+  Between tickets: run /clear before each /implement. Each ticket points back to
+  the spec, so it doesn't need this conversation's context. Before your first
+  /clear, export this session if you want to show the interviewers the grilling,
+  spec and ticket conversation, since .claude/ is gitignored.
+
+  Ticket status: I can set Status: to resolved and tick a ticket's checkboxes as
+  each one lands. The ticket files then show your progress during the demo.
+
+✻ Cooked for 49s · done 10:58 AM
+
+❯ /implement .scratch/budgets/issues/01-budgets-page-add-and-progress.md spin   
+separate agents on sonnet 5.5 if u need to implement and keep this main on as   
+orchestrator                                                                    
+
+⏺ Implementing 01: Budgets page — add a budget and see its progress. This
+  session will orchestrate, and a Sonnet 5.5 agent will write the code. I'm
+  creating a feature branch first, since we're on main.
+
+⏺ Bash(cd /Users/jordanboaz/code/interview-agentic-task-finance-tracker && git
+      checkout -b feat/monthly-budgets && git status --short && ls
+      ~/Library/Caches/ms-playwri…)
+  ⎿  Switched to a new branch 'feat/monthly-budgets'
+      M AGENTS.md
+      M CLAUDE.md
+     … +7 lines (ctrl+o to expand)
+
+⏺ I'll commit the planning artifacts separately first. That way the history
+  shows the spec and tickets landing before any code.
+
+⏺ Bash(git add AGENTS.md CLAUDE.md .scratch GLOSSARY.md docs && git commit -q -m
+      "docs: budgets spec, tickets, glossary, ADR and agent tracker config…)
+  ⎿  4961bee docs: budgets spec, tickets, glossary, ADR and agent tracker c
+     onfig
+     275a04a Finance tracker take-home: monthly category budgets
+
+⏺ Agent(Implement ticket 01 budgets) Sonnet 5.5
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ Ticket 01 is underway. So far:
+
+  - Branch: I created feat/monthly-budgets off main.
+  - Planning commit: commit 4961bee holds the spec, the six tickets,
+    GLOSSARY.md, ADR 0001, the docs/agents/ tracker config and the Agent skills
+    block in CLAUDE.md/AGENTS.md. It comes before any feature code, so the
+    history shows planning first.
+  - Implementer: a Sonnet 5.5 agent is building ticket 01 in the background. It
+    got pointers to the ticket, spec, glossary, ADR and CLAUDE.md, plus what I'd
+    already learned about the codebase, so it doesn't have to re-explore. It
+    also has the two test seams you agreed to, so it won't ask about them again.
+  - Its job: follow the repo's tdd skill, build only ticket 01, get pnpm run 
+    check passing, and not commit.
+
+  When it reports back, I'll:
+  1. Check its result myself: look at the diff and rerun the checks.
+  2. Run code-review on the diff, and send any fixes to a fresh Sonnet agent.
+  3. Commit ticket 01 and set its Status: to resolved.
+
+  You'll be notified when it finishes.
+
+✻ Sautéed for 40s · done 11:00 AM
+
+❯ while impleemntation works, provide me commands so i can already commit the   
+  current decisions and upload this to my github                                
+
+⏺ Your decisions are already committed. Commit 4961bee on feat/monthly-budgets
+  holds the spec, the six tickets, GLOSSARY.md, ADR 0001, the docs/agents/
+  config and the CLAUDE.md/AGENTS.md changes. All that's left is pushing it to
+  your own GitHub.
+
+  Don't push to origin. It points to
+  Railsreactor/interview-agentic-task-finance-tracker, the interviewer's repo.
+  Add your own repo as a second remote instead.
+
+  1. Create your repo and add it as a remote (needs gh auth login done):
+  cd ~/code/interview-agentic-task-finance-tracker
+  gh repo create interview-agentic-task-finance-tracker --private --source=.
+  --remote=mine
+  If you'd rather create the repo on github.com yourself, use this instead:
+  git remote add mine
+  git@github.com:<your-username>/interview-agentic-task-finance-tracker.git
+
+  2. Push the original baseline and the feature branch:
+  git push -u mine main
+  git push -u mine feat/monthly-budgets
+
+  3. Optional: commit your agent setup. The PDF suggests doing this so the
+  interviewers can see your skills and config. Right now .claude/ and .agents/
+  are gitignored:
+  sed -i '' -e '/^\.agents$/d' -e '/^\.claude$/d' .gitignore
+  git add .gitignore .claude .agents skills-lock.json
+  git commit -m "chore: commit agent skills and config for interview review"
+  git push
+  Check git status before you commit. If .claude/settings.local.json exists, it
+  may contain local permissions you don't want published. If so, unstage it with
+  git restore --staged .claude/settings.local.json.
+
+  While the implementer is running:
+  - Only add named paths, as in step 3. Don't run git add -A or git add .,
+    because it would pick up the agent's half-written ticket 01 files.
+  - Don't switch branches or stash, since the agent is writing into this working
+    tree.
+  - Pushing is safe: it only sends commits that already exist.
+
+  Once ticket 01 is reviewed and committed, a plain git push will update your
+  repo.
+
+✻ Cooked for 10s · done 11:01 AM
+
+❯ ok, give me the commands to alrrady push the setup we did prior to have the   
+  implementation started, group the files into commits                          
+⏺ Bash(git log --oneline -3 && git show --stat --oneline HEAD | tail -15 && ls
+      -la .claude .claude/* | head -20 && git remote -v)
+  ⎿  4961bee docs: budgets spec, tickets, glossary, ADR and agent tracker c
+     onfig
+     275a04a Finance tracker take-home: monthly category budgets
+     … +38 lines (ctrl+o to expand)
+
+⏺ Bash(git branch -r)
+  ⎿    mine/feat/monthly-budgets
+       mine/main
+       origin/HEAD -> origin/main
+       origin/main
+
+⏺ You've already added the mine remote
+  (jbrmaiden/interview-agentic-task-finance-tracker) and pushed main and
+  feat/monthly-budgets. That means the branch on GitHub already has my single
+  planning commit, 4961bee. Regrouping it means rewriting that commit and
+  force-pushing your branch. That's safe here because it's your own repo and
+  nobody else has pulled it.
+
+  The commands below rewrite only the history. git reset HEAD~1 leaves every
+  file on disk alone, and each commit adds named paths only, so the
+  implementer's ticket 01 work in progress is never touched or staged.
+
+  cd ~/code/interview-agentic-task-finance-tracker
+
+  # Undo the combined planning commit, keeping all its files on disk (unstaged)
+  git reset HEAD~1
+
+  # 1. Agent skills setup: issue tracker, triage labels, domain docs layout
+  git add CLAUDE.md AGENTS.md docs/agents
+  git commit -m "chore: configure agent skills (local issue tracker, triage 
+  labels, domain docs)"
+
+  # 2. Domain model from the grilling session
+  git add GLOSSARY.md docs/adr
+  git commit -m "docs: add budgets glossary and ADR 0001 (budgets are 
+  per-currency)"
+
+  # 3. Spec
+  git add .scratch/budgets/spec.md
+  git commit -m "docs: add monthly category budgets spec"
+
+  # 4. Tickets
+  git add .scratch/budgets/issues
+  git commit -m "docs: split budgets spec into six tracer-bullet tickets"
+
+  # 5. Agent skills and config, so interviewers can see the setup
+  #    (.claude has only skill symlinks into .agents, no local settings)
+  sed -i '' -e '/^\.agents$/d' -e '/^\.claude$/d' .gitignore
+  git add .gitignore .claude .agents skills-lock.json
+  git commit -m "chore: commit agent skills and config for interview review"
+
+  # Check: 5 new commits on top of 275a04a, and nothing else staged
+  git log --oneline -6
+  git status --short
+
+  # Replace the branch on your GitHub (your repo only, never origin)
+  git push --force-with-lease mine feat/monthly-budgets
+
+  - git status --short: after the commits, it should list only the implementer's
+    files, such as src/..., tests/..., drizzle/... and messages/en.json. If any
+    of those turn up staged, run git restore --staged <file> before pushing.
+  - --force-with-lease: it refuses to push if your GitHub branch has commits you
+    haven't seen, so it can't overwrite anything by accident.
+  - Commit messages: I left off the Co-Authored-By trailer because you're the
+    one making these commits. Add it if you want the agent's involvement
+    credited in the history.
+
+✻ Sautéed for 23s · done 11:09 AM
+
+› Message from general-purpose
+  Ticket 01 is built and every acceptance checkbox is covered. `pnpm run check`
+  itself could not run as written. Typecheck, lint and unit tests pass, but the
+  E2E run has one failure that predates my work.
+
+  **Files**
+  - `src/db/schema.ts` — adds the `budgets` table (unique on
+  user+category+currency, index on user).
+  - `drizzle/0004_cheerful_blur.sql`, `drizzle/meta/0004_snapshot.json`,
+  `drizzle/meta/_journal.json` — the migration; its SQL is only the new table,
+  its two FKs and the two indexes.
+  - `src/server/budgets.server.ts` — all budget rules.
+  - `src/server/budgets.functions.ts` — `getBudgets` and `createBudgetFn`, with
+  zod validation and `requireUserId()`.
+  - `src/routes/_authed/budgets.tsx` — the Budgets page.
+  - `src/components/sidebar.tsx` — Budgets nav entry after Categories.
+  - `src/routeTree.gen.ts` — regenerated.
+  - `messages/en.json` — new `budget_*` keys; `i18n:compile` run.
+  - `tests/budgets.test.ts` — 12 unit tests.
+  - `tests/e2e/budgets.spec.ts` — 8 E2E tests.
+
+  **Module interface** (`budgets.server.ts`, injectable `now` and `db`)
+  - `listBudgets(userId, now?, db?)` returns `{ month: "YYYY-MM", budgets: [{
+  id, categoryId, categoryName, categoryColor, categoryParentId, currency,
+  limitMinor, spentMinor, remainingMinor, overBudget }], currencies,
+  defaultCurrency }`.
+  - `createBudget(userId, { categoryId, currency, limit: "100.00" }, db?)`
+  returns `{ id }` or `{ error, code }`. Codes are `invalid_limit`,
+  `category_not_found`, `currency_unavailable` and `budget_exists`.
+
+  **Test results**
+  - `pnpm run typecheck` and `pnpm run lint`: pass (0 warnings, 0 errors).
+  - `pnpm run test`: 24 files, 211 tests, all pass.
+  - E2E via full Playwright run: 157 passed, 1 failed,
+  `transactions-list.spec.ts:80` ("table displays transactions with correct
+  columns"). It fails the same way on a clean checkout of HEAD, so it is not
+  caused by this work.
+
+  **Judgement calls and deviations**
+  - **E2E run:** a dev server (pid 49399, started 10:40, not mine) holds port
+  3000, and `playwright.config.ts` forbids reusing it. I did not kill it. I ran
+  the suite from a temporary copy of the config on port 3100, then deleted that
+  copy. You may want to stop the dev server and rerun `pnpm run check` for a
+  clean result.
+  - **Browser:** I ran `playwright install chromium`, because the cached browser
+  was the wrong version.
+  - **Extra error code:** `invalid_limit` is not in the ticket's list. The
+  module returns it for zero, negative or unparseable limits, and the UI
+  localises it.
+  - **Default currency:** it is chosen per account (the account with the most
+  transactions). Different-currency ties, or no transactions, give PLN.
+  - **Category picker:** subcategories are nested with a "— " prefix, matching
+  the transaction form.
+  - **FK on category:** `budgets.category_id` has a foreign key, as the other
+  tables do. Deleting a category that has a budget will therefore fail with a
+  foreign-key error until the category-deletion ticket removes those budgets
+  first.
+  - **Existing bug, left alone:** in `getAccounts`, the correlated subselect
+  `COUNT(*) ... WHERE account_id = ${accounts.id}` likely renders an unqualified
+  `id`, which would resolve to `transactions.id`. I avoided the pattern in
+  budgets and did not touch the existing code.
+  - **Skipped:** `skills-lock.json` was already untracked and is unrelated.
+  Nothing is committed.
+
+⏺ I'll check the implementer's report against the repo myself before reviewing
+  it: the diff, the checks, and the two claims that matter most.
+
+⏺ Bash(git log --oneline -7 && git status --short && git diff --stat && cat
+      drizzle/0004_*.sql && ps -o pid,lstart,command -p 49399 2>/dev/null)
+  ⎿  8902c3f chore: commit agent skills and config for interview review
+     e4fa2c3 docs: split budgets spec into six tracer-bullet tickets
+     bc55b43 docs: add monthly category budgets spec
+     … +36 lines (ctrl+o to expand)
+
+⏺ Agent "Implement ticket 01 budgets" finished · 11m 9s
+
+⏺ Bash(pnpm run typecheck 2>&1 | tail -3 && pnpm run lint 2>&1 | tail -3 && pnpm
+      exec vitest run 2>&1 | tail -6)
+  ⎿  ℹ [paraglide-js] Compiling inlang project ...
+     ✔ [paraglide-js] Successfully compiled inlang project.
+     … +12 lines (ctrl+o to expand)
+  ⎿  (timeout 6m 40s)
+
+❯ write me a pr description for this first pr set of changes                    
+
+⏺ Bash(pnpm exec vitest run 2>&1 | grep -E "Test Files|Tests " ; grep -n
+      "category_id" src/server/budgets.server.ts | head; grep -n "budgets"
+      src/server/categories.fun…)
+  ⎿   Test Files  24 passed (24)
+           Tests  211 passed (211)
+     Tests closed successfully but something prevents Vite server from exit
+     … +10 lines (ctrl+o to expand)
+  ⎿  (timeout 3m 20s)
+
+⏺ Skill(interview-agentic-task-finance-tracker:pr)
+  ⎿  Successfully loaded skill
+
+⏺ Bash(grep -nE "^\s*(it|test|describe)\(" tests/budgets.test.ts
+      tests/e2e/budgets.spec.ts | sed 's/async.*//')
+  ⎿  tests/budgets.test.ts:56:describe("budgets module", () => {
+     tests/budgets.test.ts:79:  it("creates a budget and lists it with spen
+     ding and remaining",
+     … +25 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +62 (ctrl+o to expand)
+
+⏺ I've written the PR description for ticket 01 to
+  /private/tmp/claude-501/-Users-jordanboaz-code/56134271-c890-4409-85b4-8356b3a
+  61e2a/scratchpad/pr-01-budgets.md. Once ticket 01 is committed, open the PR
+  against your own repo with:
+
+  gh pr create --repo jbrmaiden/interview-agentic-task-finance-tracker \
+    --base main --head feat/monthly-budgets \
+    --title "Budgets page: add a budget and see its progress (ticket 01)" \
+    --body-file /private/tmp/claude-501/-Users-jordanboaz-code/56134271-c890-440
+  9-85b4-8356b3a61e2a/scratchpad/pr-01-budgets.md
+
+  It follows the repo's pr template:
+  - Summary: a diff sketch of the new files and pseudocode for the spending
+    rule.
+  - Evidence: the unit and E2E test names plus the check results.
+  - Merge danger: a two-way door, with blast radius "categories".
+
+  Don't open the PR yet. Checking the implementer's report turned up two
+  regressions that ticket 01 introduces:
+
+  1. Deleting a category that has a budget now fails. The implementer gave
+     budgets.category_id a foreign key, as the other tables have, but category
+     deletion doesn't remove budgets yet. That was scheduled for ticket 02.
+  2. Permanent account deletion now fails for anyone with a budget. The same
+     keys on categories and users block it. That cleanup was scheduled for
+     ticket 06. This one is worse: it breaks a compliance requirement.
+
+  The PR description flags the first one. Both break "must not break existing
+  functionality". I recommend pulling the two cleanup steps into ticket 01
+  before committing: removing budgets in category deletion, and deleting budgets
+  in the account hard delete. Each is a few lines. Tickets 02 and 06 then just
+  keep their tests for it.
+
+  What I checked myself:
+  - Passed: typecheck, lint and unit tests (211/211). The migration only adds
+    the new table and its indexes.
+  - Not yet verified: the full E2E run (157 passed, 1 failed). That result is
+    the implementer's. They say transactions-list.spec.ts:80 also fails without
+    these changes. I haven't confirmed that, or run E2E myself. The run used
+    port 3100, because your pnpm run dev (pid 49399) holds port 3000 and the
+    Playwright config won't reuse it.
+  - Not done yet: the code-review step.
+
+  What I'll do once you confirm:
+  1. Have a Sonnet agent add the two cleanups, with tests.
+  2. Run code-review.
+  3. Ask you to stop your dev server so I can run a clean pnpm run check.
+  4. Commit and update the PR description.
+
+  Should I go ahead?
+
+  Something you may want to fix separately: the implementer found what looks
+  like an existing bug in getAccounts. Its account transaction count probably
+  matches the wrong id column. I haven't checked it, and nothing touches it in
+  this ticket.
+
+✻ Churned for 13m 24s · done 11:13 AM
+
+❯ noo, the first pr description should be for the 5 commits we did, rewrite it  
+  and provide me the command again, althoug its been merged already i want to   
+  change its description                                                        
+
+⏺ Bash(gh pr list --repo jbrmaiden/interview-agentic-task-finance-tracker
+      --state all --limit 5 2>&1; git log --oneline 275a04a..8902c3f; git show
+      --stat --format= 890…)
+  ⎿  1       Setting up      feat/monthly-budgets    MERGED
+     2026-11-10T14:13:31Z
+     8902c3f chore: commit agent skills and config for interview review
+     e4fa2c3 docs: split budgets spec into six tracer-bullet tickets
+     … +9 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +62 (ctrl+o to expand)
+
+⏺ I've rewritten the description for PR #1 ("Setting up", already merged) to
+  cover the five planning commits, 8881e3e to 8902c3f. It contains no ticket 01
+  code. It's saved to /private/tmp/claude-501/-Users-jordanboaz-code/56134271-c8
+  90-4409-85b4-8356b3a61e2a/scratchpad/pr-00-setup.md.
+
+  To update the merged PR (gh pr edit works on merged PRs):
+
+  gh pr edit 1 --repo jbrmaiden/interview-agentic-task-finance-tracker \
+    --title "Plan monthly category budgets: agent setup, glossary, ADR, spec and
+  tickets" \
+    --body-file /private/tmp/claude-501/-Users-jordanboaz-code/56134271-c890-440
+  9-85b4-8356b3a61e2a/scratchpad/pr-00-setup.md
+
+  Leave out the --title line if you want to keep "Setting up".
+
+  The description has three sections:
+  - Summary:
+    - a flowchart of the skills workflow;
+    - a file-tree diff of what was added;
+    - the key decisions from the grilling session;
+    - the ticket dependency tree.
+  - Evidence: before is only TASK.md, with its open questions. After is every
+    question decided in the spec, plus the agreed test seams.
+  - Merge danger:
+    - Two-way door: it's docs and config only.
+    - Blast radius is "agents": the CLAUDE.md change affects what agents load,
+      and .claude/ and .agents/ are no longer gitignored.
+
+  Because PR #1 merged feat/monthly-budgets, ticket 01's PR will need its own
+  branch or a fresh PR from the same branch.
+
+  My earlier question still stands. Ticket 01 is uncommitted and has two
+  regressions: deleting a budgeted category fails, and account hard delete fails
+  for users with budgets. Should I have a Sonnet agent pull both cleanups into
+  ticket 01 before review and commit?
+
+✻ Sautéed for 29s · done 11:15 AM
+
+❯ cool, so lets proceed now with opening PR for the changes for 1 and spin two  
+  idependeny agents to work on /implement for 02 and 03                         
+
+⏺ Bash(git fetch -q mine && git log --oneline -3 mine/main && git merge-base
+      --is-ancestor HEAD mine/main && echo "HEAD is in mine/main"; grep -nE
+      "port|reuseExistingS…)
+  ⎿  2b09efa Merge pull request #1 from jbrmaiden/feat/monthly-budgets
+     8902c3f chore: commit agent skills and config for interview review
+     e4fa2c3 docs: split budgets spec into six tracer-bullet tickets
+     … +10 lines (ctrl+o to expand)
+
+⏺ Remote main already contains the planning commits through the PR #1 merge.
+  I'll put ticket 01 on its own branch based on mine/main, commit it, and open
+  its PR.
+
+⏺ Bash(git checkout -q -b feat/budgets-01-page mine/main && git add
+      drizzle/0004_cheerful_blur.sql drizzle/meta/0004_snapshot.json
+      drizzle/meta/_journal.json messages/…)
+  ⎿  47c42d1 feat(budgets): budgets page — add a budget and see its progres
+     s (ticket 01)
+     2b09efa Merge pull request #1 from jbrmaiden/feat/monthly-budgets
+  ⎿  Updated .scratch/budgets/issues/01-budgets-page-add-and-progress.md
+     (+1 -1)
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+
+⏺ Now I'll update the PR body: the summary no longer needs to mention the
+  planning commits, and I'll note which ticket fixes each regression.
+
+⏺ Bash(cd /private/tmp/claude-501/-Users-jordanboaz-code/56134271-c890-4409-85b4
+      -8356b3a61e2a/scratchpad && python3 - <<'EOF'
+      p="pr-01-budgets.md"; s=open(p).read()…)
+  ⎿  remote:      https://github.com/jbrmaiden/interview-agentic-task-finan
+     ce-tracker/pull/new/feat/budgets-01-page
+     remote:
+     … +2 lines (ctrl+o to expand)
+
+⏺ PR #2 is open, and I'm starting agents for tickets 02 and 03 in parallel, each
+  in its own worktree and on its own E2E port. · summary
+
+⏺ 2 background agents launched (↓ to manage)
+   ├ Implement ticket 02 budgets
+   └ Implement ticket 03 budgets
+⏺ I opened PR #2 for ticket 01 and started the agents for tickets 02 and 03.
+
+  PR #2 for ticket 01:
+  https://github.com/jbrmaiden/interview-agentic-task-finance-tracker/pull/2
+  - It's on the new branch feat/budgets-01-page, cut from your remote main after
+    the PR #1 merge. The commit is 47c42d1, and ticket 01's Status: is set to
+    resolved.
+  - I rewrote the PR description. It now describes only ticket 01 and lists both
+    known regressions: deleting a category that has a budget fails, and account
+    hard delete fails for a user with budgets. It says not to deploy 01
+    without 02.
+  - I haven't run code-review on 01 yet. I'll run one review over 01 + 02 + 03
+    once they're merged together.
+
+  Two Sonnet 5.5 agents, running in parallel in separate git worktrees off 
+  47c42d1:
+
+  Ticket: 02: change limit, remove, follow category changes
+  Branch: feat/budgets-02-edit-remove
+  E2E port: 3101
+  Extra scope: Also fixes both regressions: category deletion removes its
+    budgets, and account hard delete removes the user's budgets
+  ────────────────────────────────────────
+  Ticket: 03: free-plan allowance and upsell
+  Branch: feat/budgets-03-free-plan-allowance
+  E2E port: 3102
+  Extra scope: None
+
+  - Account hard delete moved into 02. It was planned for 06. It's a small
+    change and fixes the compliance regression sooner. Ticket 06 still adds
+    budgets to the export and adds alert records.
+  - Merge conflicts: both agents edit the budgets module, the page and
+    messages/en.json. I told them to keep edits contained (new functions
+    appended, new i18n keys in one contiguous block) so the conflicts stay easy
+    to resolve.
+  - Your dev server stays up. Each agent runs E2E from a temporary config copy
+    on its own port and deletes it afterwards.
+  - Each agent commits on its branch but doesn't push. When both are done, I'll
+    merge them, rerun the checks, run code-review, and open PRs.
+
+✻ Brewed for 1m 29s · done 11:20 AM
+
+❯ i forgot to run /clearing in between implementations, can u remind me once i  
+  merged prs for task 02 and 03?                                                
+
+⏺ I'll remind you. Once the PRs for tickets 02 and 03 are open and you tell me
+  they're merged, I'll tell you to run /clear before ticket 04.
+
+  You haven't lost anything by skipping it so far. /clear gives each
+  implementation a clean context, and every ticket so far has run in a fresh
+  Sonnet agent with only pointers to the ticket and spec. That is exactly what
+  /clear would have given you. This window holds only the orchestration and the
+  planning conversation.
+
+  Before you clear, do two things, because this session won't remember any of
+  this afterwards:
+  1. Export this session. It holds the grilling, spec, tickets and orchestration
+     you'll walk the interviewers through.
+  2. Let me write a short handoff note to .scratch/budgets/ covering the current
+     state: which tickets are done, the open PRs, the E2E port workaround, and
+     the pre-existing transactions-list.spec.ts:80 failure. A fresh /implement 
+     .scratch/budgets/issues/04-… can then pick up from there.
+
+✻ Baked for 7s · done 11:25 AM
+
+❯ what is the command for write the short handoff                               
+
+⏺ Bash(sed -n 1,40p /Users/jordanboaz/code/interview-agentic-task-finance-tracke
+      r/.agents/skills/handoff/SKILL.md)
+  ⎿  ---
+     name: handoff
+     description: Compact the current conversation into a handoff document
+     … +21 lines (ctrl+o to expand)
+
+⏺ There's a skill for this: /handoff. Run it after tickets 02 and 03 are merged,
+  and before /clear. Its argument says what the next session will work on, so
+  the note is written for that:
+
+  /handoff Continue the monthly budgets build: implement ticket 04 (budget 
+  alerts), then 05 and 06, orchestrating Sonnet implementer agents in worktrees
+
+  - Where it saves: /handoff writes the note to your system's temp directory
+    ($TMPDIR), not to .scratch/budgets/ as I said earlier. In the new session,
+    paste the path it prints. If you want the note kept in the repo for the
+    interview, ask me to copy it into .scratch/budgets/ afterwards.
+  - What it includes: only what isn't already written down somewhere. It points
+    to the spec, tickets, ADR and PRs instead of repeating them. It also
+    suggests which skills the next agent should load.
+  - Order: export this session first (/export), then run /handoff, then /clear.
+
+✻ Worked for 10s · done 11:26 AM
+
+› Message from general-purpose
+  Ticket 03 is done and committed (e232378) on branch
+  `feat/budgets-03-free-plan-allowance`, worktree `/Users/jordanboaz/code/interv
+  iew-agentic-task-finance-tracker/.claude/worktrees/agent-a9250c9f96f187ed7`.
+  Not pushed. Typecheck and lint pass; unit tests pass 215/215 on the final run.
+  Full E2E on port 3102 passes 160, with only the known
+  `transactions-list.spec.ts:80` failing.
+
+  Setup: the worktree started at 275a04a, not 47c42d1. I created the branch,
+  then ran `git reset --hard 47c42d1`.
+
+  Files touched:
+  - `src/server/env.ts`: `BILLING_FREE_MAX_BUDGETS` (positive integer, default
+  3) as `billing.freeMaxBudgets`.
+  - `src/server/billing.server.ts`: `maxBudgets: number | null` on
+  `Entitlements` (null on Pro), plus new `checkBudgetLimit(userId, db)`. On Free
+  at or over the allowance it returns `{allowed:false,
+  code:"budget_limit_reached", limit, error}`.
+  - `src/server/budgets.server.ts`: `createBudget` calls `checkBudgetLimit` just
+  before the insert. `BudgetErrorCode` gains `budget_limit_reached`, and the
+  error result carries an optional `limit`.
+  - `src/server/billing.functions.ts`: billing status adds
+  `entitlements.maxBudgets` and `usage.budgetsUsed`.
+  - `src/routes/_authed/billing.tsx`: new `billing-budgets-usage` list item.
+  - `src/routes/_authed/budgets.tsx`: shows the localised limit message with an
+  "Upgrade to Pro" link to `/billing` in the add dialog.
+  - `messages/en.json`: 4 new keys appended at the end.
+  - `.env.example`: documents `BILLING_FREE_MAX_ACCOUNTS` (the existing account
+  allowance, which wasn't documented there) and `BILLING_FREE_MAX_BUDGETS`.
+  - Tests: `tests/env.test.ts`, `tests/billing.test.ts`,
+  `tests/budgets.test.ts`, `tests/e2e/budgets.spec.ts`.
+  - `.scratch/budgets/issues/03-free-plan-budget-allowance.md`: status set to
+  `resolved`.
+
+  Tests added (red first, then green):
+  - **Unit:** an env default and validation test, a gate test in
+  `tests/billing.test.ts`, and two `createBudget` tests in a new
+  `describe("budget allowance")` block in `tests/budgets.test.ts`.
+  - **Existing assertion changed:** the `entitlementsForPlan` `toEqual` in
+  `tests/billing.test.ts` now includes `maxBudgets`.
+  - **E2E:** three tests for Free blocked on the 4th with the upgrade link, Pro
+  creating more than 3, and a downgrade keeping all budgets (billing page shows
+  "4 of 3 budgets").
+
+  Judgement calls:
+  - The gate runs after input, category and currency validation, so a duplicate
+  budget at the limit reports `budget_limit_reached` rather than
+  `budget_exists`.
+  - The unit suite had flaky timeouts in `db-migrate` and `health` on two full
+  runs. Both passed in isolation and on the third full run.
+  - The temporary 3102 Playwright config is deleted.
+
+⏺ Ticket 03 is reported done. While ticket 02 finishes, I'll check the commit
+  myself.
+
+⏺ Bash(git log --oneline -2 feat/budgets-03-free-plan-allowance && git show
+      --stat --format= feat/budgets-03-free-plan-allowance && git show
+      feat/budgets-03-free-plan-…)
+  ⎿  e232378 feat(budgets): free-plan budget allowance and upsell (ticket 0
+     3)
+     47c42d1 feat(budgets): budgets page — add a budget and see its progres
+     … +60 lines (ctrl+o to expand)
+
+⏺ Agent "Implement ticket 03 budgets" finished · 6m 31s
+
+⏺ Ticket 03 checks out. Its commit e232378 is based directly on ticket 01's
+  commit (47c42d1), and the allowance gate in createBudget copies the existing
+  account-limit pattern.
+
+  One small behaviour to know about: a free user at 3 budgets who tries to add a
+  duplicate is told about the plan limit, not that the budget already exists.
+  The plan check runs before the insert that catches duplicates. Either message
+  is correct, so I'm leaving it.
+
+  There's a side effect to deal with. The agents' worktrees live in
+  .claude/worktrees/, and you removed .claude from .gitignore. Those worktrees
+  could therefore show up as untracked files in your main checkout. When I
+  merge, I'll add .claude/worktrees/ back to .gitignore so they never get
+  committed by accident.
+
+  Still waiting on ticket 02. Once it reports, I'll merge both, rerun the
+  checks, run code-review, and open the PRs.
+
+✻ Churned for 11s · done 11:26 AM
+
+❯ where is the pr or commits for 03? i dont see the code changes on the ide     
+
+⏺ Ticket 03's code isn't in your IDE because it lives somewhere else. It's not
+  lost.
+
+  - Where it is: commit e232378, on the local branch
+    feat/budgets-03-free-plan-allowance. The agent worked in its own git
+    worktree at .claude/worktrees/agent-a9250c9f96f187ed7/, a separate checkout
+    of the repo.
+  - Why you don't see it: your IDE shows the main checkout, which is on
+    feat/budgets-01-page. I told the agents not to push, so there's no PR yet
+    either.
+
+  To look at it now:
+  # See the commit's changes from the main checkout
+  git show --stat e232378
+  git diff feat/budgets-01-page..feat/budgets-03-free-plan-allowance
+
+  # Or open the worktree folder in your IDE
+  code .claude/worktrees/agent-a9250c9f96f187ed7
+
+  To push it and open a PR now, base it on ticket 01's branch. PR #2 isn't
+  merged yet, so this keeps the 03 PR to just its own changes:
+  git push -u mine feat/budgets-03-free-plan-allowance
+  gh pr create --repo jbrmaiden/interview-agentic-task-finance-tracker \
+    --base feat/budgets-01-page --head feat/budgets-03-free-plan-allowance \
+    --title "Free-plan budget allowance and upsell (ticket 03)" --fill
+  Once PR #2 merges, GitHub switches this PR's base to main automatically.
+
+  Do you want me to run those and write a proper PR description with the pr
+  skill? Or should I wait for ticket 02 and open both together, after the merge
+  check and code-review, as planned?
+
+✻ Sautéed for 8s · done 11:28 AM
+
+❯ @@ -6,7 +6,7 @@ Spec: .scratch/budgets/spec.md (user stories 54–59).          
+  jordanboaz@Jordans-MacBook-Pro interview-agentic-task-finance-tracker %       
+  code .claude/worktrees/agent-a9250c9f96f187ed7                                
+                                                                                
+  zsh: command not found: code                                                  
+
+⏺ The code command isn't on your PATH; VS Code doesn't install it by default.
+  Any of these will open the worktree:
+
+  # macOS, no setup needed
+  open -a "Visual Studio Code" .claude/worktrees/agent-a9250c9f96f187ed7
+
+  # Cursor, if that's your IDE
+  open -a Cursor .claude/worktrees/agent-a9250c9f96f187ed7
+
+  To get code working permanently: in VS Code, press ⌘⇧P, run Shell Command: 
+  Install 'code' command in PATH, then open a new terminal.
+
+  You can also skip the worktree and view the changes from your current
+  checkout:
+
+  git diff feat/budgets-01-page..feat/budgets-03-free-plan-allowance
+
+✻ Brewed for 4s · done 11:29 AM
+
+› Message from general-purpose
+  Ticket 02 is committed, with every acceptance checkbox and the extra scope
+  done.
+
+  **Branch and commit:** `feat/budgets-02-edit-remove`, SHA `1e58bbd`, not
+  pushed. Worktree: `/Users/jordanboaz/code/interview-agentic-task-finance-track
+  er/.claude/worktrees/agent-a4238d427bf07e078`. The worktree started at
+  `275a04a`, so I ran `git reset --hard 47c42d1` as instructed.
+
+  **Files touched**
+  - `src/server/budgets.server.ts`: new functions appended at the end, plus
+  `inArray` added to the drizzle import.
+  - `src/server/budgets.functions.ts`: `changeBudgetLimitFn` and
+  `removeBudgetFn` appended.
+  - `src/server/categories.functions.ts`: `deleteCategory` calls
+  `removeBudgetsForCategories` before deleting categories.
+  - `src/server/compliance.server.ts`: `hardDeleteUser` deletes the user's
+  budgets in its transaction, before categories.
+  - `src/routes/_authed/budgets.tsx`: edit dialog (category and currency
+  read-only), remove confirmation dialog, Edit and Remove buttons per row.
+  - `messages/en.json`: 6 new keys appended as one block at the end.
+  - `tests/budgets.test.ts`: one new `describe` appended at the end.
+  - `tests/compliance.test.ts`: `seedFullUser` gains a budget, and the
+  hard-delete test asserts budgets are gone.
+  - `tests/e2e/budgets.spec.ts`: 3 new tests appended.
+  - Ticket file: `**Status:** resolved`.
+
+  **New public functions** (the first three are in
+  `src/server/budgets.server.ts`, the last two in
+  `src/server/budgets.functions.ts`)
+  - `changeBudgetLimit(userId, budgetId, limit, db?)`
+  - `removeBudget(userId, budgetId, db?)`
+  - `removeBudgetsForCategories(userId, categoryIds, db?)`
+  - `changeBudgetLimitFn`
+  - `removeBudgetFn`
+
+  Change and remove both return `budget_not_found` for a foreign or missing
+  budget.
+
+  **Results**
+  - Unit tests: 218 pass (7 new in `tests/budgets.test.ts`).
+  - Typecheck and lint pass.
+  - E2E on port 3101: 158 of 161 passed. The failures were the known
+  `transactions-list.spec.ts:80` and `import-rules.spec.ts:213`. The
+  `import-rules` one passed on two isolated reruns, so it looks load-flaky and
+  unrelated to budgets. Two of my own E2E tests failed in that run, and I fixed
+  their selectors.
+  - I did not re-run the full E2E suite after that last fix. The budgets spec
+  and `import-rules.spec.ts` passed together afterwards, apart from the same
+  `import-rules` flake.
+  - The temporary 3101 config is deleted.
+
+  **Judgement calls**
+  - Alert changes: none. No alert-check call exists yet in this ticket, so
+  changing a limit does not trigger one. That belongs to ticket 04.
+  - Budget alerts: the `budget_alerts` table does not exist yet, so
+  `removeBudget` and `hardDeleteUser` only touch budgets. Ticket 04 will need to
+  remove alert rows in both places.
+  - Money formatting: the edit dialog prefills the limit with `formatMinor`,
+  because the existing money test forbids `toFixed` in app code.
+  - Red step: I wrote the unit tests and implementation together, so there was
+  no separate red run.
+
+⏺ Both tickets are in. Before opening any PRs, I'll check that 02 and 03 merge
+  together cleanly and that the combined result passes. I'm doing that on a
+  throwaway integration branch.
+
+⏺ Bash(git status --short | head && git checkout -q -b integration/budgets-01-03
+      feat/budgets-01-page && git merge --no-edit -q
+      feat/budgets-02-edit-remove && git merg…)
+  ⎿  ?? .claude/worktrees/
+     Auto-merging src/server/budgets.server.ts
+     Auto-merging tests/budgets.test.ts
+     … +17 lines (ctrl+o to expand)
+  ⎿  Updated .env.example (+5 -0)
+  ⎿  Updated
+     .scratch/budgets/issues/02-change-limit-remove-and-category-changes.md
+     (+1 -1)
+  ⎿  Updated .scratch/budgets/issues/03-free-plan-budget-allowance.md (+1 
+     -1)
+  ⎿  Updated messages/en.json (+14 -1)
+  ⎿  Updated src/routes/_authed/billing.tsx (+10 -0)
+  ⎿  … 13 more files changed
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+
+⏺ Agent "Implement ticket 02 budgets" finished · 9m 38s
+
+❯ write a proper /pr for task 03 and open the pr                                
+
+⏺ I'll open the ticket 03 PR first. Its branch is based on ticket 01 alone, so
+  the PR has no conflicts. The conflicts above only show up when 02 and 03 are
+  combined, and I'll resolve them afterwards.
+
+⏺ Bash(git diff 47c42d1 e232378 -- src/server/billing.server.ts
+      src/server/env.ts | grep -E "^\+" | grep -v "^+++" | head -60; git diff
+      47c42d1 e232378 -- tests | grep…)
+  ⎿  +  /** null = unlimited. */
+     +  maxBudgets: number | null;
+     +      maxBudgets: null,
+     … +53 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +56 (ctrl+o to expand)
+
+⏺ Bash(git push -q -u mine feat/budgets-03-free-plan-allowance 2>&1 | grep -v
+      "^remote:" ; gh pr create --repo
+      jbrmaiden/interview-agentic-task-finance-tracker --base…)
+  ⎿  https://github.com/jbrmaiden/interview-agentic-task-finance-tracker/pu
+     ll/3
+
+⏺ PR #3 is open. Now back to the integration check: resolving the two conflicts
+  from combining 02 and 03.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Both conflicts are just two blocks appended at the same spot, so the fix is to
+  keep both sides. The JSON needs a comma between them.
+
+⏺ Bash(python3 - <<'EOF'
+      import re…)
+  ⎿  messages/en.json 1
+     tests/budgets.test.ts 1
+     json-ok
+     … +32 lines (ctrl+o to expand)
+  ⎿  Updated messages/en.json (+1 -4)
+      432    "budget_over_by": "Over by {amount}",
+      433    "budget_over_label": "Over budget",
+      434    "budget_progress_label": "{category} budget progress",
+      435 -<<<<<<< HEAD                                                  
+      435    "edit_budget": "Edit Budget",
+      436    "save_budget_btn": "Save Budget",
+      437    "budget_not_found": "That budget no longer exists.",
+      438    "remove_budget_title": "Remove budget?",
+      439    "remove_budget_confirm": "Remove the {category} budget ({cur
+           rency})? Your transactions and categories are not affected.",
+      441 -  "remove_budget_btn": "Remove"                               
+      442 -=======                                                       
+      440 +  "remove_budget_btn": "Remove",                              
+      441    "budget_limit_reached": "The free plan is limited to {limit}
+            budgets. Upgrade to Pro for unlimited budgets.",
+      442    "budget_upgrade_link": "Upgrade to Pro",
+      443    "billing_budgets_usage": "{used} of {limit} budgets",
+      444    "billing_budgets_unlimited": "{used} budgets (unlimited)"
+      447 ->>>>>>> feat/budgets-03-free-plan-allowance                   
+      445  }
+  ⎿  Updated tests/budgets.test.ts (+1 -3)
+      275    });
+      276  });
+      277  
+      278 -<<<<<<< HEAD                                                  
+      278  describe("budgets module: change, remove, category changes", (
+           ) => {
+      279    beforeEach(async () => {
+      280      for (const id of [userId, otherUserId]) {
+     ...
+      433        .set({ parent_id: fun })
+      434        .where(eq(schema.categories.id, cinema));
+      435      expect(await spent()).toBe(100);
+      437 -=======                                                       
+      436 +                                                              
+      437  describe("budget allowance", () => {
+      438    const limitUser = "budgets-limit-user";
+      439  
+     ...
+      504        expect("id" in r).toBe(true);
+      505      }
+      506      expect((await listBudgets(limitUser, NOW, db)).budgets).to
+           HaveLength(4);
+      508 ->>>>>>> feat/budgets-03-free-plan-allowance                   
+      507    });
+      508  });
+⏺ The test file merge put ticket 03's describe block inside ticket 02's, because
+  git left the shared closing braces outside the conflict. I'm closing 02's
+  block before 03 starts. · summary
+
+⏺ Bash(python3 - <<'EOF'
+      p="tests/budgets.test.ts"; s=open(p).read()…)
+  ⎿  Traceback (most recent call last):
+       File "<stdin>", line 3, in <module>
+     AssertionError
+     … +15 lines (ctrl+o to expand)
+  ⎿  Updated .gitignore (+1 -0)
+      26  .pi
+      27  .gsd-id
+      28  src/paraglide/
+      29 +.claude/worktrees/                                             
+  ⎿  (timeout 5m)
+
+⏺ Bash(grep -n 'describe("budget allowance"' tests/budgets.test.ts && sed -n
+      432,438p tests/budgets.test.ts | cat -A | head -8)
+  ⎿  437:describe("budget allowance", () => {
+     cat: illegal option -- A
+     usage: cat [-belnstuv] [file ...]
+
+⏺ Bash(python3 - <<'EOF'
+      p="tests/budgets.test.ts"; lines=open(p).read().split("\n")…)
+  ⎿  ['      .where(eq(schema.categories.id, cinema));', '    expect(await
+     spent()).toBe(100);', '']
+     ✔ [paraglide-js] Successfully compiled inlang project.
+     … +5 lines (ctrl+o to expand)
+  ⎿  Updated tests/budgets.test.ts (+2 -0)
+      433        .set({ parent_id: fun })
+      434        .where(eq(schema.categories.id, cinema));
+      435      expect(await spent()).toBe(100);
+      436 +  });                                                         
+      437 +});                                                           
+      438  
+      439  describe("budget allowance", () => {
+      440    const limitUser = "budgets-limit-user";
+  ⎿  (timeout 6m 40s)
+
+⏺ The combined branch passes typecheck, lint and all 222 unit tests, so I'm
+  committing the merge and then running the full E2E suite on port 3103 to leave
+  your dev server alone. · summary
+
+⏺ Bash(git add tests/budgets.test.ts && git commit -q --no-edit && git log
+      --oneline -4 && sed -n 30,60p playwright.config.ts)
+  ⎿  2db9c01 Merge branch 'feat/budgets-03-free-plan-allowance' into integr
+     ation/budgets-01-03
+     1e58bbd feat(budgets): change limit, remove budget, follow category ch
+     … +32 lines (ctrl+o to expand)
+
+❯ how can i test implementation of task 03? the runnign server has it or i need 
+  to run it on the worktree?                                                    
+
+⏺ Bash(cat > playwright.port3103.config.ts <<'EOF'
+      import base from "./playwright.config";…)
+  ⎿  14:    baseURL: "http://127.0.0.1:3000",
+  ⎿  Created playwright.port3103.config.ts (+11 -0)
+       1 +import base from "./playwright.config";                        
+       2 +const URL = "http://127.0.0.1:3103";                           
+       3 +export default {                                               
+       4 +  ...base,                                                     
+       5 +  use: { ...base.use, baseURL: URL },                          
+       6 +  webServer: {                                                 
+       7 +    ...base.webServer,                                         
+       8 +    url: URL,                                                  
+       9 +    env: { ...(base.webServer as { env: Record<string, string> 
+         +}).env, PORT: "3103", APP_BASE_URL: URL },                     
+      10 +  },                                                           
+      11 +};                                                             
+
+⏺ Bash(pnpm exec playwright test -c playwright.port3103.config.ts
+      --reporter=line 2>&1 | tail -40)
+  ⎿  Running in the background (↓ to manage)
+
+⏺ Your running dev server doesn't have ticket 03 working yet, but you don't need
+  the worktree either.
+
+  What the server is showing: your pnpm run dev (started 10:40) serves whatever
+  files are in the main checkout. That checkout is now on
+  integration/budgets-01-03, which contains tickets 01, 02 and 03 together, and
+  Vite hot-reloads the code. But database migrations only run when the server
+  starts. Your server started before the budgets table existed, so the Budgets
+  page will fail against your local database.
+
+  Restart it in the main checkout. You don't need the worktree.
+  # stop the old server (Ctrl+C in its terminal, or:)
+  kill 49399
+  pnpm run dev            # applies migration 0004, serves 01+02+03
+
+  Manually testing ticket 03:
+  1. Sign in at http://127.0.0.1:3000. Make sure you have at least one account;
+     a new user gets a "Main" PLN account.
+  2. Go to Budgets and add 3 budgets on different categories.
+  3. Try to add a 4th. You should see "The free plan is limited to 3 budgets…"
+     with an Upgrade to Pro link to /billing.
+  4. Open Billing. It should show "3 of 3 budgets".
+
+  Testing Pro and the downgrade path: plans can only be switched in test mode,
+  through /test-set-plan. Test mode uses an in-memory database, so data resets
+  when you restart:
+  TEST_MODE=1 pnpm run dev
+  Then, while signed in, run this in the browser devtools console:
+  await fetch('/test-set-plan?plan=pro', { method: 'POST' })
+  // now unlimited
+  await fetch('/test-set-plan?plan=free&status=canceled', { method: 'POST' })
+  // downgrade: existing kept, adding blocked
+  To try a different limit without test mode, run BILLING_FREE_MAX_BUDGETS=1 
+  pnpm run dev.
+
+  Meanwhile: I've started the full E2E suite on the combined 01+02+03 branch, on
+  port 3103, so it won't collide with your server.
+
+✻ Brewed for 13m 21s · done 11:32 AM
+
+⏺ Background command "Run full E2E suite on the integration branch" completed
+(exit code 0)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The full E2E suite passed on the combined branch except for one failure, at
+  transactions-list.spec.ts:80, which also fails on the original base commit and
+  looks timezone-related. I'm removing the temporary config and running the
+  code-review step next. · summary
+
+⏺ Bash(rm playwright.port3103.config.ts && git status --short)
+  ⎿  Deleted playwright.port3103.config.ts (+0 -11)
+       1 -import base from "./playwright.config";                        
+       2 -const URL = "http://127.0.0.1:3103";                           
+       3 -export default {                                               
+       4 -  ...base,                                                     
+       5 -  use: { ...base.use, baseURL: URL },                          
+       6 -  webServer: {                                                 
+       7 -    ...base.webServer,                                         
+       8 -    url: URL,                                                  
+       9 -    env: { ...(base.webServer as { env: Record<string, string> 
+         -}).env, PORT: "3103", APP_BASE_URL: URL },                     
+      10 -  },                                                           
+      11 -};                                                             
+
+⏺ Skill(interview-agentic-task-finance-tracker:code-review)
+  ⎿  Successfully loaded skill
+
+⏺ Bash(git rev-parse --short mine/main && git log mine/main..HEAD --oneline &&
+      git diff mine/main...HEAD --stat | tail -2; ls CODING_STANDARDS.md
+      CONTRIBUTING.md 2>&1)
+  ⎿  Error: Exit code 1
+     2b09efa
+     2db9c01 Merge branch 'feat/budgets-03-free-plan-allowance' into 
+     integration/budgets-01-03
+     1e58bbd feat(budgets): change limit, remove budget, follow category changes
+     (ticket 02)
+     e232378 feat(budgets): free-plan budget allowance and upsell (ticket 03)
+     47c42d1 feat(budgets): budgets page — add a budget and see its progress 
+     (ticket 01)
+      tests/env.test.ts                                  |   12 +
+      26 files changed, 3587 insertions(+), 5 deletions(-)
+     ls: CODING_STANDARDS.md: No such file or directory
+     ls: CONTRIBUTING.md: No such file or directory
+
+⏺ 2 background agents launched (↓ to manage)
+   ├ Standards review of budgets diff
+   └ Spec review of budgets diff
+
+⏺ The combined 01+02+03 branch passes everything I ran:
+  - typecheck and lint;
+  - 222/222 unit tests;
+  - E2E 163/164, where the single failure, transactions-list.spec.ts:80, also
+    fails on the original base commit.
+
+  The code-review step is running now as two parallel Sonnet reviewers:
+  - Standards checks against CLAUDE.md, the money and ownership rules, the
+    billing and logging rules, and the code-smell baseline.
+  - Spec checks against the spec and tickets 01–03.
+
+  I'll show both reports side by side when they finish.
+
+  Current state:
+  - PRs: #2 is open for ticket 01 and #3 for ticket 03, which is stacked on 01.
+    Ticket 02 has no PR yet.
+  - Local: the main checkout is on integration/budgets-01-03, a local-only
+    branch. It has the merge with the two conflicts resolved, plus
+    .claude/worktrees/ added to .gitignore.
+
+✻ Churned for 48s · done 11:33 AM
+
+› Message from general-purpose
+  Standards review of `mine/main...HEAD` (generated files skipped). I read the
+  code only and did not run anything.
+
+  **Hard violations (documented standards)**
+
+  1. **Money through float arithmetic.** Rule: `src/lib/money.ts` header, "no
+  monetary value may pass through float arithmetic". Two places break it.
+     - `src/server/budgets.server.ts:118`:
+  `COALESCE(SUM(ABS(tx.amount_minor)),0)::float8 AS spent_minor` casts the
+  spending sum to float. Integer minor units should be summed as bigint and
+  converted with `Number()` at the edge.
+     - `src/server/budgets.server.ts:129`: `Number(r.spent_minor)` then reads
+  that float value.
+     - Also `src/routes/_authed/budgets.tsx:257`: `Math.round((spentMinor /
+  limitMinor) * 100)` computes progress from a float ratio. This one is
+  display-only and is a judgement call. A pure-integer percentage would be
+  stricter.
+  2. **Hardcoded English in a user-facing flow.** Rule: CLAUDE.md, all UI text
+  goes through `m.*()`.
+     - `src/server/billing.server.ts:~140`: the `error` string `Free plan is
+  limited to ${n} budgets...` is English. The UI maps the code to
+  `m.budget_limit_reached`, but `errorMessage()`'s `default` branch still falls
+  back to this raw string.
+     - The server `error` strings in
+  `budgets.server.ts:176,191,196,218,239,250,273` have the same fallback path.
+  That matches the existing `checkAccountLimit` pattern, so treat it as soft.
+     - `src/routes/_authed/budgets.tsx:212,412`: `placeholder="0.00"` is
+  hardcoded. `transactions.tsx:392` does the same with `"0"`, so low severity.
+  3. **Possible money formatting outside `money.ts`.**
+  `src/routes/_authed/budgets.tsx:278-295` uses `formatMoney`, which is allowed.
+  Line 351 uses `formatMinor` to prefill the edit input, which is also allowed,
+  and the other money handling goes through `money.ts` too. I found no
+  violation here.
+  4. **Ownership.** Every id-taking handler checks ownership in the same query,
+  so there is no violation.
+     - `createBudget`, `changeBudgetLimit` and `removeBudget` check `user_id`.
+     - `removeBudgetsForCategories` filters on `user_id`.
+     - The `listBudgets` raw SQL is parameterised (`${userId}`, `${from}`), so
+  there is no injection risk.
+     - Caveat: `categories.functions.ts` passes `allIdsToDelete` to
+  `removeBudgetsForCategories`. I did not verify that those ids were
+  ownership-checked upstream, but the budgets delete is itself user-scoped.
+  5. **Logging.** No log lines were added in the budgets code, so there is no
+  breach.
+  6. **Plan checks (billing.server.ts header).** `checkBudgetLimit` reads
+  `getEntitlements`, so `billing.server.ts` stays the single source of truth.
+  The UI has no plan checks. The only plan-related client logic is the
+  `budget_limit_reached` code, which is fine.
+  7. **Import boundary.** `budgets.tsx` imports only `*.functions` modules,
+  `#/lib/money` and UI components, which is compliant. TanStack Query usage is
+  compliant: module-level `as const` keys, `useServerFn`, invalidation after
+  mutations, and `{ error }` handled via `"error" in result`.
+
+  **Baseline smells (judgement calls)**
+
+  - **Duplicated Code**
+    - `src/routes/_authed/budgets.tsx:140-158` and `357-371` (`BudgetForm` and
+  `EditBudgetForm`) repeat the same parse, validate and submit shape.
+    - `budgets.server.ts:174-177` and `237-240` repeat the same limit
+  validation.
+    - `billing.server.ts` `checkBudgetLimit` mirrors `checkAccountLimit`.
+    - `billing.functions.ts:51-54` adds a count query that duplicates the one in
+  `checkBudgetLimit`.
+    - `budgets.server.ts:36-48`: `monthStartDate` and `nextMonthStartDate` are
+  near-identical.
+  - **Data Clumps / Primitive Obsession**: `{categoryId, currency, limit}` is
+  retyped three times in `budgets.tsx` (lines 116, 510 and 566) even though
+  `CreateBudgetInput` exists server-side. `currency` and `code` are bare
+  strings, and `"PLN"` is a default duplicated at `budgets.server.ts:68,75,78`
+  and `budgets.tsx:694`.
+  - **Mysterious Name**: `BudgetItem` and `BudgetForm` are acceptable, but
+  `ordered` and `depthById` (`budgets.tsx:548,558`) call `flattenCategoryTree`
+  twice. This is minor.
+  - **Repeated Switches**: `errorMessage()` (`budgets.tsx:74`) switches on the
+  error code. It is a single site, so this is fine.
+  - **Style nits**
+    - `budgets.server.ts:224-225` has a double blank line.
+    - `categories.functions.ts` has a pre-existing double blank line.
+  - **Glossary**
+    - `BudgetErrorCode` is fine.
+    - Over-budget naming (`overBudget`) matches the glossary.
+    - The `billing_budgets_*` messages and `budgets.tsx` don't use the
+  "Allowance" or "Cap" synonyms that the glossary's _Avoid_ list rules out.
+
+  **Tests**: `tests/e2e/budgets.spec.ts` exists and uses `getByRole`.
+
+⏺ The Standards report is in. It found one real hard violation: the spending
+  total is cast to a float in SQL (::float8) before it reaches JavaScript.
+  Integer money should stay integer from the SQL SUM through to the edge. Still
+  waiting on the Spec reviewer. Once it reports, I'll show both side by side and
+  suggest which fixes to make.
+
+✻ Baked for 3s · done 11:33 AM
+
+⏺ Agent "Standards review of budgets diff" finished · 28s
+
+› Message from general-purpose
+  Spec review of tickets 01-03 (diff mine/main...HEAD). I read the code and
+  tests only. I did not run tests, Playwright or `pnpm run check`.
+
+  **Domain rules checked in SQL/logic.** These are correct:
+  - Spending sums descendants at any depth (recursive CTE,
+  budgets.server.ts:91-99), only `amount_minor < 0` (:115), and only where
+  `a.currency = b.currency` (:117).
+  - The month is `[1st, next 1st)` in UTC (:116). Uncategorised transactions
+  never join the category tree, so they are excluded.
+  - Over budget is strictly greater (:140).
+  - Uniqueness is the unique index plus `onConflictDoNothing` (:214).
+  - A foreign category returns `category_not_found` via a user-scoped query
+  (:180-192).
+  - `changeBudgetLimit` and `removeBudget` check ownership in the same query.
+  - Category deletion removes budgets for all deleted ids before the categories
+  (categories.functions.ts:~309).
+  - Re-parenting works because spending is computed live.
+  - `hardDeleteUser` deletes budgets (compliance.server.ts:332) after accounts
+  and before categories.
+  - The free allowance of 3 is enforced, existing budgets are untouched, and Pro
+  is unlimited.
+
+  **(a) Missing or partial**
+  1. Ticket 01: "Currency picker ... defaults to the currency of the account
+  with the most transactions (PLN on a tie or with no transactions)". The
+  fallback `PLN` (budgets.server.ts:77-78) can be a currency the user has no
+  account in, for example USD-only accounts with no transactions.
+  `defaultCurrency` is then not in `currencies`. The form seeds
+  `useState(defaultCurrency)` (budgets.tsx:123, 133). A user who submits without
+  touching the picker gets `currency_unavailable`. Fix: fall back to PLN only
+  when it is available, otherwise to the first currency. The test at
+  tests/budgets.test.ts:254 never covers this case.
+  2. Ticket 01: the unit-test list names "overlap" (parent and child budgets
+  coexisting). I found no test for it in tests/budgets.test.ts; the e2e parent
+  test at tests/e2e/budgets.spec.ts:89 covers only a parent budget counting a
+  subcategory transaction.
+  3. Ticket 01: the e2e list names "add an account first" and "loading" states.
+  I found no e2e for either. The UI implements both (budgets.tsx:~650).
+  4. Ticket 03: "gate blocks the 4th on Free". The gate does a count and then an
+  insert with no transaction or lock (budgets.server.ts:199-215,
+  billing.server.ts). Concurrent creates can exceed the allowance. This is
+  weaker than "mirrors the account gate" only if the account gate is atomic,
+  which I did not check.
+
+  **(b) Scope creep**
+  - `.gitignore` adds `.claude/worktrees/`. This is unrelated to the tickets.
+  - `.env.example` adds a commented `BILLING_FREE_MAX_ACCOUNTS` line. This is
+  harmless but not asked for.
+  - Budget rows are indented by category depth (budgets.tsx:264, 136). The
+  tickets don't ask for it.
+  - Ticket 02's extra hard-delete scope is in place, with a compliance test.
+
+  **(c) Implemented but possibly wrong**
+  - The budgets page hides the whole list when the user has no account
+  currencies (budgets.tsx:~650, `!hasAccounts`). This is the intended "add an
+  account first" state, but it hides existing budgets if all accounts were
+  deleted. Edge case.
+  - `limit_minor` is a Postgres `integer`. An absurdly large limit that parses
+  successfully would raise a DB error rather than a validation error. I did not
+  check whether `parseAmountToMinor` caps the value.
+
+  **Ticket checkboxes.** All other boxes look met: migration and index, zod
+  server functions, error codes, read-only edit dialog, remove confirmation
+  dialog, `BILLING_FREE_MAX_BUDGETS` env, `maxBudgets` entitlement, billing
+  usage text, and the e2e coverage for the free, Pro and billing-usage cases.
+
+⏺ Both reports are in. Before presenting them, I'll confirm the two findings
+  that matter most against the code.
+
+⏺ Bash(sed -n 60,82p src/server/budgets.server.ts; sed -n 112,132p
+      src/server/budgets.server.ts; grep -n
+      "MAX_SAFE\|isSafeInteger\|2147483647" src/lib/money.ts src/ser…)
+  ⎿      .leftJoin(
+           schema.transactions,
+           eq(schema.transactions.account_id, schema.accounts.id),
+     … +43 lines (ctrl+o to expand)
+
+⏺ Agent "Spec review of budgets diff" finished · 40s
+
+⏺ I've confirmed the main findings against the code. Here are both reports, kept
+  separate as the review skill requires.
+
+  Standards
+
+  Hard violations
+  1. Money goes through a float (src/lib/money.ts: "no monetary value may pass
+     through float arithmetic"). At budgets.server.ts:118,
+     SUM(ABS(amount_minor))::float8 turns the spending total into a float, and
+     line 129 then reads it with Number(). I confirmed this. It should stay an
+     integer: cast to bigint and convert at the edge, the way
+     analytics.server.ts does with .mapWith(Number).
+  2. English fallback strings (CLAUDE.md: all UI text through m.*()). The UI
+     maps every error code to Paraglide messages. But the default branch of
+     errorMessage() falls back to the server's English error string. The
+     existing account-limit code does the same, so this is soft.
+
+  Judgement calls
+  - Duplicated code:
+    - the add and edit forms repeat the same parse, validate and submit logic
+      (budgets.tsx:140-158, 357-371);
+    - limit validation is repeated in budgets.server.ts;
+    - billing.functions repeats checkBudgetLimit's count query;
+    - monthStartDate and nextMonthStartDate are near-identical.
+  - Data clumps: {categoryId, currency, limit} is retyped three times in the
+    route. The "PLN" default appears in four places.
+  - Smaller items: the progress percentage uses float maths (display only),
+    there's a hardcoded placeholder="0.00" (the existing transactions form does
+    the same), and there's a stray double blank line.
+
+  Checked and fine: ownership checks in the same query, parameterised raw SQL
+  with no injection risk, no amounts in logs, plan checks only in billing, the
+  route import boundary, and the TanStack Query pattern.
+
+  Spec
+
+  Correct, checked against the actual SQL:
+  - descendants at any depth;
+  - only negative amounts count;
+  - currency taken from the account;
+  - the month runs from the 1st (inclusive) to the next 1st (exclusive);
+  - uncategorised transactions excluded;
+  - over budget means strictly greater;
+  - uniqueness and the foreign-category check;
+  - category deletion removes budgets for all descendants;
+  - re-parenting re-scopes budgets;
+  - hard delete removes budgets.
+
+  (a) Missing or partial
+  1. The default currency can be unavailable. I confirmed this at
+     budgets.server.ts:77-78. A user whose only accounts are in USD and who has
+     no transactions gets the default PLN, which isn't in their picker. If they
+     submit without touching the picker, they get currency_unavailable. This is
+     a real bug.
+  2. There's no unit test for overlapping parent and child budgets, which ticket
+     01 lists.
+  3. There are no E2E tests for the "add an account first" and loading states.
+     The UI implements both.
+  4. The free-plan check counts budgets, then inserts, with no lock. Two
+     simultaneous creates could exceed 3. The existing account gate
+     (checkAccountLimit) works the same way, so this matches the codebase.
+
+  (b) Scope creep:
+  - .gitignore gained .claude/worktrees/, which I added on purpose;
+  - .env.example now documents BILLING_FREE_MAX_ACCOUNTS;
+  - budget rows are indented by category depth.
+
+  All are harmless.
+
+  (c) Possibly wrong
+  - A huge limit, above about 21.4 million in major units, passes
+    parseAmountToMinor but overflows the integer column. The user gets a
+    database error instead of a validation message. I confirmed the money parser
+    only checks for safe JavaScript integers.
+  - The no-accounts state hides existing budgets if every account is later
+    deleted. That's an edge case.
+
+  Summary: Standards has 2 hard findings plus judgement calls; the worst is the
+  ::float8 money cast. Spec has 4 missing or partial items and 2 possibly wrong;
+  the worst is the default currency that can't be submitted.
+
+  Recommended fixes, all small and all in the budgets files
+
+  1. Keep spending as an integer: change the cast to bigint and convert at the
+     edge.
+  2. Fix the default-currency fallback: use PLN only if the user has a PLN
+     account, otherwise their first currency. Add a test for it.
+  3. Cap the limit at the integer maximum and return invalid_limit above it. Add
+     a test.
+  4. Add the missing unit test for overlapping budgets and E2E tests for "add an
+     account first".
+
+  I'd leave these as they are, since they're judgement calls or match the
+  existing codebase:
+  - the form duplication;
+  - the English fallback strings;
+  - the non-atomic free-plan check.
+
+  Should I have a Sonnet agent apply fixes 1–4?
+  - Fixes 1, 3 and 4 belong to ticket 01's code. I'd put them on top of ticket
+    01's branch so PR #2 updates, then merge them into tickets 02 and 03's
+    branches.
+  - Fix 2 touches the same function. It goes in the same commit.
+
+  Also, do you want a PR opened for ticket 02 now (based on ticket 01's branch,
+  like #3), or after the fixes?
+
+✻ Churned for 1m 48s · done 11:34 AM
+❯ cool, pr 1 is already merged. pr 3 for ticket 3 is open. see if there is      
+  notrhing missing in there, so i can merge it alrrady. apply the fixes on the  
+  ticket 2 branch, since i havent opened the pr for it so far and keep in mind  
+  to prevent conflicts -- run these on different agents                         
+
+⏺ First I'll check the PR states and the branch layout, so I can plan the fix
+  work around conflicts.
+
+⏺ Bash(gh pr list --repo jbrmaiden/interview-agentic-task-finance-tracker
+      --state all --json
+      number,title,state,baseRefName,headRefName,mergeable,mergedAt --jq '.[]
+      |…)
+  ⎿  3 OPEN feat/budgets-01-page<-feat/budgets-03-free-plan-allowance merge
+     able=MERGEABLE Free-plan budget allowance and upsell (ticket 03)
+     2 MERGED main<-feat/budgets-01-page mergeable=UNKNOWN Budgets page: ad
+     … +12 lines (ctrl+o to expand)
+
+⏺ PR #2 is merged, but PR #3 still targets feat/budgets-01-page instead of main,
+  so I'm retargeting it before I check what's left. · summary
+
+⏺ Bash(gh pr edit 3 --repo jbrmaiden/interview-agentic-task-finance-tracker
+      --base main >/dev/null && sleep 3 && gh pr view 3 --repo
+      jbrmaiden/interview-agentic-task-f…)
+  ⎿  base=main mergeable=MERGEABLE commits=e232378 files=13
+     check   fail    21s
+     https://github.com/jbrmaiden/interview-agentic-task-financ
+     e-tracker/actions/runs/42834752881/job/129893881176
+     … +3 lines (ctrl+o to expand)
+
+⏺ PR #3 now targets main, contains only ticket 03's commit, and has no
+  conflicts. But its CI check job is failing. I'll find out why before calling
+  it mergeable.
+
+⏺ Bash(gh run view 42834752881 --repo
+      jbrmaiden/interview-agentic-task-finance-tracker --log-failed 2>&1 | grep
+      -vE "^\s*$" | tail -30; gh run list --repo jbrmaiden/in…)
+  ⎿  check   Run pnpm exec playwright install chromium --with-deps
+     2026-11-10T1
+     4:30:45.0112648Z ##[group]Run pnpm exec playwright install chromium --
+     with-deps
+     … +27 lines (ctrl+o to expand)
+
+⏺ The CI failure is unrelated to ticket 03: GitHub's ubuntu-latest now runs
+  Ubuntu 26.04, which Playwright 1.59 can't install Chromium on, so every run on
+  your repo has failed this way. I'm setting up the ticket 02 branch next,
+  after removing the two finished agent worktrees. · summary
+
+⏺ Bash(for w in .claude/worktrees/agent-a4238d427bf07e078
+      .claude/worktrees/agent-a9250c9f96f187ed7; do echo "$w: $(git -C $w status
+      --short | wc -l | tr -d ' ') dirty…)
+  ⎿  .claude/worktrees/agent-a4238d427bf07e078: 0 dirty
+     .claude/worktrees/agent-a9250c9f96f187ed7: 0 dirty
+
+⏺ Bash(git worktree remove .claude/worktrees/agent-a4238d427bf07e078 && git
+      worktree remove .claude/worktrees/agent-a9250c9f96f187ed7 && git
+      merge-base --is-ancestor f…)
+  ⎿  Deleted branch integration/budgets-01-03 (was 2db9c01).
+     Deleted branch worktree-agent-a4238d427bf07e078 (was 275a04a).
+     Deleted branch worktree-agent-a9250c9f96f187ed7 (was 275a04a).
+     … +11 lines (ctrl+o to expand)
+
+❯ nevermind the ci, we can skip it for now                                      
+  ⎿  Interrupted · What should Claude do instead?
+
+❯ nevermind the ci, we can skip it for now. can i merge pr3 ?                   
+
+⏺ Yes, PR #3 is ready to merge. Use "Create a merge commit", not squash or
+  rebase.
+
+  Why it's ready:
+  - It now targets main. It used to point at the old ticket 01 branch, and I
+    retargeted it.
+  - It's clean: it contains only ticket 03's commit (e232378) and GitHub reports
+    no conflicts.
+  - The spec review found nothing missing for ticket 03:
+    - the env setting (default 3), maxBudgets and the allowance gate;
+    - the localised limit message with the upgrade link;
+    - budget usage on the billing page;
+    - existing budgets kept after a downgrade;
+    - unit and E2E coverage for each of those.
+  - The review's ticket 03 notes are deliberate, not gaps. A duplicate budget at
+    the limit shows the plan-limit message. Two simultaneous creates could both
+    slip past the count. The existing account limit works exactly the same way.
+  - The fixes from the review belong elsewhere: they're all in ticket 01 and 02
+    code, so they'll go on the ticket 02 branch, as you asked.
+
+  Why a merge commit: the ticket 02 branch already contains e232378 plus my
+  resolution of the 02/03 conflicts, at 2db9c01. A merge commit keeps that same
+  commit, so the ticket 02 PR merges cleanly afterwards. Squash or rebase would
+  rewrite the commit and bring the messages/en.json and tests/budgets.test.ts
+  conflicts back.
+
+  Next: I've already fast-forwarded the ticket 02 branch to 2db9c01, removed the
+  finished worktrees, and deleted the integration branch. Once you've merged
+  #3, I'll start the fixes on that branch, split across two Sonnet agents in
+  separate worktrees so their files never overlap:
+  - Agent A: the server fixes, in budgets.server.ts and tests/budgets.test.ts:
+    - spending kept as an integer;
+    - the default-currency fallback;
+    - the limit cap at the column maximum;
+    - a unit test for overlapping parent and child budgets.
+  - Agent B: the missing E2E tests (the "add an account first" state), in
+    tests/e2e/budgets.spec.ts only.
+
+  I'll merge both into the ticket 02 branch, rerun the checks, and open the
+  ticket 02 PR. Should I start them now, without waiting for the merge?
+
+✻ Baked for 11s · done 11:37 AM
+
+❯ merged 3, keep working                                                        
+
+⏺ Bash(git fetch -q mine && git log --oneline -3 mine/main && git merge-base
+      --is-ancestor e232378 mine/main && echo "03 in main" && git merge
+      --no-edit -q mine/main &…)
+  ⎿  6ee57ba Merge pull request #3 from jbrmaiden/feat/budgets-03-free-plan
+     -allowance
+     e232378 feat(budgets): free-plan budget allowance and upsell (ticket 0
+     … +10 lines (ctrl+o to expand)
+
+⏺ The ticket 02 branch is now merged onto main (96f30eb) with no conflicts, and
+  its diff is just ticket 02 plus the .gitignore line. I'm starting the two fix
+  agents from this commit next. · summary
+
+⏺ 2 background agents launched (↓ to manage)
+   ├ Server fixes on ticket 02 branch
+   └ Missing budgets E2E tests
+
+⏺ PR #3 is in main, and the review fixes are being built by two Sonnet agents in
+  parallel:
+
+  ┌─────────┬───────────────────────────┬───────────────────────────┬──────┐
+  │  Agent  │          Branch           │    Files it may touch     │ E2E  │
+  │         │                           │                           │ port │
+  ├─────────┼───────────────────────────┼───────────────────────────┼──────┤
+  │ A:      │                           │ budgets.server.ts,        │      │
+  │ server  │ fix/budgets-review-server │ tests/budgets.test.ts     │ 3104 │
+  │ fixes   │                           │                           │      │
+  ├─────────┼───────────────────────────┼───────────────────────────┼──────┤
+  │ B:      │                           │                           │      │
+  │ missing │ fix/budgets-review-e2e    │ tests/e2e/budgets.spec.ts │ 3105 │
+  │  E2E    │                           │  only                     │      │
+  │ tests   │                           │                           │      │
+  └─────────┴───────────────────────────┴───────────────────────────┴──────┘
+
+  Agent A fixes four things, writing each test first:
+  - keeps spending as an integer instead of ::float8;
+  - falls back to a currency the user actually has;
+  - rejects limits above the database column's maximum, with one validation
+    helper shared by create and change-limit;
+  - adds the missing unit test for overlapping parent and child budgets.
+
+  Agent B adds an E2E test for the "add an account first" state, and one for
+  budgets becoming available once an account is added.
+
+  The two agents work on separate files, so merging them into
+  feat/budgets-02-edit-remove should be conflict-free. Both start from 96f30eb,
+  the ticket 02 branch now sitting on top of main.
+
+  Once both report, I'll:
+  1. Check each commit myself.
+  2. Merge both into the ticket 02 branch.
+  3. Rerun typecheck, lint, the unit tests and the full E2E suite.
+  4. Push the branch and open the ticket 02 PR against main with a /pr
+     description.
+
+  That PR will contain ticket 02 plus the review fixes, which also touch ticket
+  01's code. Its diff against main won't include ticket 03 again, because that's
+  already merged.
+
+  Reminder: once ticket 02 is merged, run /export, then /handoff, then /clear
+  before ticket 04.
+
+✻ Churned for 48s · done 11:39 AM
+
+› Message from general-purpose
+  All four fixes are in one commit, and typecheck, lint, vitest and the budgets
+  E2E spec all pass. Branch `fix/budgets-review-server`, commit `b2fa891`, not
+  pushed.
+
+  Files touched: `src/server/budgets.server.ts` and `tests/budgets.test.ts`. I
+  did not touch `tests/e2e/budgets.spec.ts` or `playwright.config.ts`. The
+  temporary `playwright.port3104.config.ts` is deleted.
+
+  1. **Float spending:** the SQL now sums as `::bigint` and `Number()` converts
+  it at the edge. This was a no-behaviour-change fix, so it has no red test. The
+  new test "reports spending as a safe integer" asserts `Number.isSafeInteger`
+  and passes.
+  2. **Default currency:**
+     - The tie/no-transactions fallback is now `PLN` if the user has it,
+  otherwise the first sorted currency.
+     - Red→green: "defaults to a currency the user actually has" (USD-only gives
+  `USD`) and "defaults to the first sorted currency on a tie without PLN"
+  (USD+EUR gives `EUR`).
+     - The existing PLN-tie test still passes.
+  3. **Limit overflow:**
+     - A private `parseLimit` helper replaces the duplicated validation in
+  `createBudget` and `changeBudgetLimit`.
+     - It rejects limits above 2147483647 minor units with `invalid_limit`.
+     - Red→green: "rejects a limit above the integer column maximum on create"
+  and "caps the new limit at the integer column maximum" (change-limit). Both
+  check "21474836.48" is rejected and "21474836.47" is accepted.
+  4. **Overlap:** added "computes parent and child budgets on the same tree
+  independently". It was green immediately, because the behaviour already
+  worked; it is a regression guard (parent 150, child 100).
+
+  Checks:
+  - `pnpm run typecheck`: pass.
+  - `pnpm run lint`: 0 warnings and 0 errors.
+  - `pnpm exec vitest run`: 228 passed.
+  - Budgets E2E on port 3104: 17 passed.
+
+⏺ Bash(git log --oneline -2 fix/budgets-review-server && git show --stat
+      --format= fix/budgets-review-server && git show fix/budgets-review-server
+      -- src/server/budget…)
+  ⎿  b2fa891 fix(budgets): integer spending, safe default currency, limit c
+     ap, overlap test
+     96f30eb Merge remote-tracking branch 'mine/main' into feat/budgets-02-
+     … +29 lines (ctrl+o to expand)
+
+⏺ Agent "Server fixes on ticket 02 branch" finished · 2m 24s
+
+⏺ Agent A's commit (b2fa891) matches the review findings and changes only the
+  two files it was given. I'll fast-forward the ticket 02 branch to it now, and
+  merge agent B's work when it reports.
+
+⏺ Bash(git merge -q --ff-only fix/budgets-review-server && git log --oneline -2)
+  ⎿  b2fa891 fix(budgets): integer spending, safe default currency, limit c
+     ap, overlap test
+     96f30eb Merge remote-tracking branch 'mine/main' into feat/budgets-02-
+     edit-remove
+  ⎿  Updated src/server/budgets.server.ts (+19 -8)
+  ⎿  Updated tests/budgets.test.ts (+54 -0)
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+
+⏺ Agent A is done. Its fixes are on feat/budgets-02-edit-remove at b2fa891. It
+  reported 228 unit tests and 17 budgets E2E tests passing.
+
+  - Integer spending: the ::float8 cast is now ::bigint, converted to a number
+    at the edge.
+  - Default currency: it falls back to PLN only if the user has it, otherwise to
+    their first currency.
+  - Limit cap: a shared parseLimit helper rejects limits above 2,147,483,647
+    minor units. Create and change-limit both use it, which also removes the
+    duplication the review flagged.
+  - Overlap test: it passed straight away, so it's a regression guard rather
+    than a bug fix.
+
+  Waiting on agent B, which is adding the no-accounts E2E tests. Once it
+  reports, I'll merge it, run the full check, then push and open the ticket 02
+  PR.
+
+✻ Cogitated for 14s · done 11:41 AM
+
+› Message from general-purpose
+  Branch `fix/budgets-review-e2e`, commit `adb9f90`. Only
+  `tests/e2e/budgets.spec.ts` changed; nothing pushed, and the temporary
+  port-3105 config is deleted.
+
+  Two tests added in a new "Budgets without accounts" describe block:
+  1. With no accounts, Budgets shows the "Add an account first" heading, its
+  description and the "Go to Accounts" link, with text read from
+  `messages/en.json`. The Add Budget button is absent (count 0), which is what
+  the page does.
+  2. After deleting Main, the user follows the link to Accounts, adds "Dollar
+  Wallet" in USD and returns to Budgets. The need-account heading is gone, Add
+  Budget opens, and the Currency picker has one option, USD.
+
+  I skipped the loading-state test because it can't be observed reliably.
+
+  Results: the full `budgets.spec.ts` run on port 3105 gave 19 passed both times
+  (17 in the file, plus 3 `setup.spec.ts` tests that the config runs first, not
+  counted in the 17). `pnpm run lint` reports 0 warnings and 0 errors. I did
+  not run `pnpm run check`. No app changes were needed.
+
+⏺ Bash(git show --stat --format=%s adb9f90 | head -4 && git merge --no-edit -q
+      fix/budgets-review-e2e && git log --oneline -4 && for w in $(git worktree
+      list --porcela…)
+  ⎿  test(budgets): cover the no-accounts state in E2E
+
+      tests/e2e/budgets.spec.ts | 64 ++++++++++++++++++++++++++++++++++++++
+     … +16 lines (ctrl+o to expand)
+  ⎿  Updated tests/e2e/budgets.spec.ts (+64 -0)
+  ⎿  (a git step in this command can move the working tree, so these may be
+     its changes, not edits) (ctrl+o to expand)
+
+⏺ Agent "Missing budgets E2E tests" finished · 2m 37s
+⏺ Both fixes are merged into the ticket 02 branch (1f06286) and the agent
+  worktrees are cleaned up. I'll run the full check on the combined result:
+  typecheck, lint, unit tests, then E2E on port 3103.
+
+⏺ Bash(git branch --format='%(refname:short)'; pnpm run typecheck 2>&1 | tail
+      -1; pnpm run lint 2>&1 | grep -E "warnings"; pnpm exec vitest run 2>&1 |
+      grep -E "Test Fi…)
+  ⎿  feat/budgets-01-page
+     feat/budgets-02-edit-remove
+     feat/budgets-03-free-plan-allowance
+     … +17 lines (ctrl+o to expand)
+  ⎿  (timeout 10m)
+
+⏺ Typecheck, lint and all 228 unit tests are clean, and E2E shows one failure,
+  the same pre-existing transactions-list.spec.ts:80. I'm writing the ticket 02
+  PR description and opening the PR next. · summary
+
+⏺ Bash(git diff mine/main --stat | tail -12; git diff mine/main -- tests | grep
+      -E "^\+\s*(it|test|describe)\(" | sed 's/async.*//')
+  ⎿   .gitignore                                         |   1 +
+      .../02-change-limit-remove-and-category-changes.md |   2 +-
+      messages/en.json                                   |   6 +
+     … +28 lines (ctrl+o to expand)
+
+  Made 1 scratchpad edit +71 (ctrl+o to expand)
+
+⏺ Bash(git push -q -u mine feat/budgets-02-edit-remove 2>&1 | grep -v
+      "^remote:"; gh pr create --repo
+      jbrmaiden/interview-agentic-task-finance-tracker --base main --he…)
+  ⎿  https://github.com/jbrmaiden/interview-agentic-task-finance-tracker/pu
+     ll/4
+
+⏺ The ticket 02 PR is open as #4:
+  https://github.com/jbrmaiden/interview-agentic-task-finance-tracker/pull/4. It
+  targets main and contains only ticket 02 and the review fixes, since ticket
+  03 is already in main.
+
+  What's in it:
+  - Ticket 02: change a budget's limit, remove a budget after confirming, and
+    deleting a category removes its budgets.
+  - Both regressions from #2 are fixed: deleting a category that has a budget
+    works again, and account hard delete works for users with budgets.
+  - The review fixes:
+    - spending stays an integer;
+    - the default currency is always one the user holds;
+    - limits that would overflow the column are rejected with invalid_limit;
+    - a unit test for overlapping budgets;
+    - two E2E tests for the no-accounts state.
+
+  Checked on the final branch:
+  - typecheck and lint pass;
+  - unit tests pass, 228/228;
+  - E2E is 165 passed, 1 failed. The failure is transactions-list.spec.ts:80,
+    which also fails before any budgets code.
+
+  CI will still fail on the Ubuntu 26.04 Playwright issue you said to skip.
+
+  Merge with "Create a merge commit", like #3.
+
+  One note for ticket 04: this PR deletes budget rows in category deletion and
+  account hard delete. When ticket 04 adds the budget alerts table, it must
+  delete alert rows in those same two places. The PR description says so, and
+  I'll include it in the handoff.
+
+  Reminder: once #4 is merged, do this before ticket 04:
+  1. /export this session, for the interview.
+  2. Run /handoff Continue the monthly budgets build: implement ticket 04 
+     (budget alerts), then 05 and 06, orchestrating Sonnet implementer agents in
+     worktrees.
+  3. /clear.
+
+✻ Crunched for 5m 31s · done 11:43 AM
