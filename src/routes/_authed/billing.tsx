@@ -9,9 +9,9 @@ import {
 } from "#/server/billing.functions";
 import { m } from "#/paraglide/messages";
 import { Button } from "#/components/ui/button";
+import { BILLING_QUERY_KEY } from "#/lib/query-keys";
 
 
-const BILLING_QUERY_KEY = ["billing"] as const;
 
 type BillingSearch = { checkout?: "success" | "cancelled" };
 
