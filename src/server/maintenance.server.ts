@@ -1,13 +1,14 @@
 import { runBudgetAlertCheckForAllUsers } from "#/server/budgets.server";
 import { runComplianceSweep } from "#/server/compliance.server";
 import { env } from "#/server/env";
-import { getLogger } from "#/server/logger";
+import { errorName, getLogger } from "#/server/logger";
 
 //
 // In-process scheduler for the compliance sweep and the budget alert
 // backstop. There is no external job runner — the loop is armed lazily by the
-// first request (see start.ts) and re-runs hourly. TEST_MODE never arms it: E2E tests trigger the sweep
-// deterministically through /test-run-sweep instead.
+// first request (see start.ts) and re-runs hourly. TEST_MODE never arms it:
+// E2E tests trigger the compliance sweep through /test-run-sweep, and the
+// budget backstop is covered by unit tests of runBudgetAlertCheckForAllUsers.
 
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
@@ -26,7 +27,7 @@ export function ensureMaintenanceLoop(): void {
   const budgetAlerts = () =>
     runBudgetAlertCheckForAllUsers().catch((error) =>
       getLogger().error(
-        { errorName: error instanceof Error ? error.name : "unknown" },
+        { errorName: errorName(error) },
         "budget alert backstop failed",
       ),
     );

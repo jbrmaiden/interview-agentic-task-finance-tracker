@@ -43,3 +43,11 @@ export function getLogger(): pino.Logger {
 }
 
 export { rootLogger as logger };
+
+/**
+ * Class name of an error, safe to log. Never log `err.message` for database
+ * errors: Drizzle embeds the failed SQL and its params (amounts, names) there.
+ */
+export function errorName(err: unknown): string {
+  return err instanceof Error ? err.name : "unknown";
+}

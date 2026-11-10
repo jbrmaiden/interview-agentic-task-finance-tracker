@@ -5,7 +5,7 @@ import { m } from "#/paraglide/messages";
 import { checkBudgetLimit } from "#/server/billing.server";
 import { sendEmail, type EmailMessage } from "#/server/email";
 import { env } from "#/server/env";
-import { getLogger } from "#/server/logger";
+import { errorName, getLogger } from "#/server/logger";
 
 //
 // The single owner of every budget rule (see GLOSSARY.md and ADR 0001).
@@ -420,11 +420,6 @@ export async function runBudgetAlertCheck({
     }
   }
   return result;
-}
-
-/** Class name of an error, safe to log (unlike its message). */
-function errorName(err: unknown): string {
-  return err instanceof Error ? err.name : "unknown";
 }
 
 /**
