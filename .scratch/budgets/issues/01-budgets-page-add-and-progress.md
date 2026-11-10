@@ -11,7 +11,7 @@ Spec: `.scratch/budgets/spec.md` (user stories 1–33, 62–63). Vocabulary: `GL
 - [ ] New migration adds the budgets table: owner, category, currency, limit in integer minor units, created/updated timestamps; unique on (user, category, currency); indexed by user. Existing tables unchanged.
 - [ ] Budgets server module exposes "list budgets with progress" for an injectable `now` (plus available currencies and the default currency) and "create budget"; server functions wrap them with zod validation and session user resolution.
 - [ ] Create validates: limit is a positive amount parsed with the existing money parser; category exists and is owned by the user (a foreign category returns the same error as a missing one); currency is one of the user's account currencies; no existing budget for that (category, currency). Errors return machine codes (`category_not_found`, `currency_unavailable`, `budget_exists`) that the UI localises.
-- [ ] Currency picker lists only the distinct currencies of the user's accounts and defaults to the currency of the account with the most transactions (PLN on a tie or with no transactions).
+- [ ] Currency picker lists only the distinct currencies of the user's accounts and defaults to the currency of the account with the most transactions (on a tie or with no transactions, PLN if the user has it, otherwise their first currency).
 - [ ] Category picker shows the tree with subcategories visibly nested.
 - [ ] Empty state when there are no budgets; "add an account first" state when the user has no accounts; loading indicator while fetching. The page shows which month it covers.
 - [ ] Exactly-at-limit shows "0 left" and is not over budget.

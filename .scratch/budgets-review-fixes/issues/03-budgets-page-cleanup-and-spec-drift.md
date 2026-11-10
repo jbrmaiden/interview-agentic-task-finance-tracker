@@ -11,11 +11,11 @@ Source: full two-axis review of the budgets feature (`275a04a..80f412a`); CLAUDE
 
 **Blocked by:** 01 (Show the free-plan budget allowance before it's reached). Both change the budgets page and its E2E spec, so this ticket goes after 01 to avoid conflicts; it doesn't depend on 01's logic.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A transport failure on add, edit or remove shows a translated error message, and the dialog stays usable. Covered by an E2E test that makes the request fail.
-- [ ] Budget rows are accessible groups named after their category. The budgets E2E spec has no test-id locators for rows or their edit and remove actions.
-- [ ] The "leaves transactions and categories untouched" test asserts through the public interface only.
-- [ ] The nesting comment describes the actual ordering, and the unused category-parent field is gone.
-- [ ] The default-currency wording in the budgets spec and ticket 01 matches the code.
-- [ ] Existing budgets unit and E2E tests still pass.
+- [x] A transport failure on add, edit or remove shows a translated error message, and the dialog stays usable. Covered by an E2E test that makes the request fail.
+- [x] Budget rows are accessible groups named after their category. The budgets E2E spec has no test-id locators for rows or their edit and remove actions.
+- [x] The "leaves transactions and categories untouched" test asserts through the public interface only.
+- [x] The nesting comment describes the actual ordering, and the unused category-parent field is gone.
+- [x] The default-currency wording in the budgets spec and ticket 01 matches the code.
+- [x] Existing budgets unit and E2E tests still pass.

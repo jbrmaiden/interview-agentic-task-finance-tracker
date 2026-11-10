@@ -19,7 +19,6 @@ export interface BudgetProgress {
   categoryId: string;
   categoryName: string;
   categoryColor: string | null;
-  categoryParentId: string | null;
   currency: string;
   limitMinor: number;
   spentMinor: number;
@@ -113,7 +112,6 @@ export async function listBudgets(
       b.limit_minor,
       cat.name AS category_name,
       cat.color AS category_color,
-      cat.parent_id AS category_parent_id,
       COALESCE((
         SELECT SUM(ABS(tx.amount_minor))
         FROM tree t
@@ -141,7 +139,6 @@ export async function listBudgets(
       categoryId: r.category_id as string,
       categoryName: r.category_name as string,
       categoryColor: (r.category_color as string | null) ?? null,
-      categoryParentId: (r.category_parent_id as string | null) ?? null,
       currency: r.currency as string,
       limitMinor,
       spentMinor,

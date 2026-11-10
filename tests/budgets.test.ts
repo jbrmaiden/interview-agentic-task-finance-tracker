@@ -417,12 +417,13 @@ describe("budgets module: change, remove, category changes", () => {
     expect(await removeBudget(userId, id, db)).toEqual({ id });
 
     expect(await list()).toEqual([]);
-    expect(
-      await db.select().from(schema.transactions).where(eq(schema.transactions.user_id, userId)),
-    ).toHaveLength(1);
-    expect(
-      await db.select().from(schema.categories).where(eq(schema.categories.user_id, userId)),
-    ).toHaveLength(1);
+
+    // Re-adding a budget on the same category proves the category survived,
+    // and its spending proves the transaction did.
+    await create(food);
+    expect(await list()).toMatchObject([
+      { categoryId: food, spentMinor: 100 },
+    ]);
   });
 
   it("treats a foreign or missing budget as budget_not_found when removing", async () => {

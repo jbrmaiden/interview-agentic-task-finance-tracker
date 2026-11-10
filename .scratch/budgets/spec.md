@@ -124,7 +124,7 @@ Free-plan users can hold up to 3 budgets; Pro users unlimited. Reaching the free
 - **Over budget:** spending strictly greater than limit.
 - **Overlap:** parent and child budgets coexist and are computed independently.
 - **Category tree changes:** spending is always computed live from the current category tree, so moving a category re-scopes budgets with no stored state to fix. Deleting a category (and its descendants) deletes every budget on any of those categories, together with their alert records, inside the existing category-deletion flow.
-- **Currency choices:** the distinct currencies of the user's accounts. The default is the currency of the account with the most transactions, falling back to PLN on a tie or when there are no transactions. With no accounts, budget creation is unavailable.
+- **Currency choices:** the distinct currencies of the user's accounts. The default is the currency of the account with the most transactions, on a tie or with no transactions, PLN if the user has it, otherwise their first currency. With no accounts, budget creation is unavailable.
 
 ### Budget alerts
 
@@ -140,7 +140,7 @@ Free-plan users can hold up to 3 budgets; Pro users unlimited. Reaching the free
 ### Modules
 
 - **Budgets server module (new, deep):** the single owner of every budget rule. Public interface, roughly:
-  - list a user's budgets with progress (category name/colour/parent, currency, limit, spending, remaining, over-budget flag) for the budget month of a given `now`, plus the plan allowance and usage, the available currencies, and the default currency;
+  - list a user's budgets with progress (category name/colour, currency, limit, spending, remaining, over-budget flag) for the budget month of a given `now`, plus the plan allowance and usage, the available currencies, and the default currency;
   - create a budget (validates category ownership, currency availability, uniqueness, and the plan allowance);
   - change a budget's limit;
   - remove a budget (and its alert records);
