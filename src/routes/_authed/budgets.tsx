@@ -35,10 +35,10 @@ import {
 import { getCategories } from "#/server/categories.functions";
 import { formatMinor, formatMoney, parseAmountToMinor } from "#/lib/money";
 
+import { BILLING_QUERY_KEY } from "#/lib/query-keys";
+
 const BUDGETS_QUERY_KEY = ["budgets"] as const;
 const CATEGORIES_QUERY_KEY = ["categories"] as const;
-// Shared with the billing page, whose usage line counts budgets.
-const BILLING_QUERY_KEY = ["billing"] as const;
 
 type CategoryRow = Awaited<ReturnType<typeof getCategories>>[number];
 type BudgetRow = Awaited<ReturnType<typeof getBudgets>>["budgets"][number];
@@ -440,11 +440,13 @@ function EditBudgetForm({
 function RemoveBudgetDialog({
   budget,
   error,
+  pending,
   onCancel,
   onConfirm,
 }: {
   budget: BudgetRow | null;
   error: string | null;
+  pending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -475,6 +477,7 @@ function RemoveBudgetDialog({
           <AlertDialogCancel onClick={onCancel}>{m.cancel()}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
+            disabled={pending}
             onClick={(e) => {
               // Keep the dialog open so a failure can be shown inside it.
               e.preventDefault();
@@ -490,6 +493,22 @@ function RemoveBudgetDialog({
 }
 
 // --- Page ---
+
+/**
+ * Run a mutation; on a network-level failure show the network error through
+ * `setError` and return null so the caller just stops.
+ */
+async function attempt<T extends object>(
+  run: () => Promise<T>,
+  setError: (message: string) => void,
+): Promise<T | null> {
+  try {
+    return await run();
+  } catch {
+    setError(m.budget_network_error());
+    return null;
+  }
+}
 
 function BudgetsPage() {
   const queryClient = useQueryClient();
@@ -581,14 +600,12 @@ function BudgetsPage() {
   }) => {
     setFormError(null);
     setLimitReached(false);
-    let result;
-    try {
-      result = await createMutation.mutateAsync(input);
-    } catch {
-      setFormError(m.budget_network_error());
-      return;
-    }
-    if (result && "error" in result) {
+    const result = await attempt(
+      () => createMutation.mutateAsync(input),
+      setFormError,
+    );
+    if (!result) return;
+    if ("error" in result) {
       setFormError(errorMessage(result.code, result.error, result.limit));
       setLimitReached(result.code === "budget_limit_reached");
       return;
@@ -599,17 +616,12 @@ function BudgetsPage() {
   const handleEdit = async (limit: string) => {
     if (!editing) return;
     setEditError(null);
-    let result;
-    try {
-      result = await changeLimitMutation.mutateAsync({
-        id: editing.id,
-        limit,
-      });
-    } catch {
-      setEditError(m.budget_network_error());
-      return;
-    }
-    if (result && "error" in result) {
+    const result = await attempt(
+      () => changeLimitMutation.mutateAsync({ id: editing.id, limit }),
+      setEditError,
+    );
+    if (!result) return;
+    if ("error" in result) {
       setEditError(errorMessage(result.code, result.error));
       return;
     }
@@ -619,14 +631,12 @@ function BudgetsPage() {
   const handleRemove = async () => {
     if (!removing) return;
     setRemoveError(null);
-    let result;
-    try {
-      result = await removeMutation.mutateAsync(removing.id);
-    } catch {
-      setRemoveError(m.budget_network_error());
-      return;
-    }
-    if (result && "error" in result) {
+    const result = await attempt(
+      () => removeMutation.mutateAsync(removing.id),
+      setRemoveError,
+    );
+    if (!result) return;
+    if ("error" in result) {
       setRemoveError(errorMessage(result.code, result.error));
       return;
     }
@@ -766,6 +776,7 @@ function BudgetsPage() {
       <RemoveBudgetDialog
         budget={removing}
         error={removeError}
+        pending={removeMutation.isPending}
         onCancel={() => {
           setRemoving(null);
           setRemoveError(null);
