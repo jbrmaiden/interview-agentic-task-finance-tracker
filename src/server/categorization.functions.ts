@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
+import { checkBudgetsAfterWrite } from "#/server/budgets.server";
 import { isEmailVerified, requireUserId } from "#/server/session";
 import { matchRule, type RuleRow } from "#/server/imports.functions";
 import { categorizeDescription, isAIVisible } from "#/server/ai";
@@ -292,6 +293,7 @@ export const applyRuleToExisting = createServerFn({ method: "POST" })
         );
       updated++;
     }
+    await checkBudgetsAfterWrite(userId, updated > 0);
     return { success: true, updated };
   });
 
@@ -491,6 +493,9 @@ export const reCategorizeTransactions = createServerFn({ method: "POST" })
       }));
       await db.insert(schema.categorization_rules).values(aiRulesInsert);
     }
+
+    // Once per request, after every row is written (never per row).
+    await checkBudgetsAfterWrite(userId, updated > 0);
 
     return { updated, aiCategorized, skipped };
   });

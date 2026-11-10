@@ -3,7 +3,10 @@ import { eq, and, asc, count, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
 import { requireUserId } from "#/server/session";
-import { removeBudgetsForCategories } from "#/server/budgets.server";
+import {
+  checkBudgetsAfterWrite,
+  removeBudgetsForCategories,
+} from "#/server/budgets.server";
 
 
 const colorRegex = /^#[0-9A-Fa-f]{6}$/;
@@ -313,6 +316,9 @@ export const deleteCategory = createServerFn({ method: "POST" })
     await db
       .delete(schema.categories)
       .where(inArray(schema.categories.id, allIdsToDelete));
+
+    // Reassigned spending now counts toward the target category's budgets.
+    await checkBudgetsAfterWrite(userId, Boolean(data.reassignToCategoryId));
 
     return { success: true };
   });

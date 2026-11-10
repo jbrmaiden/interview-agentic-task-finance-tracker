@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
+import { checkBudgetsAfterWrite } from "#/server/budgets.server";
 import { isEmailVerified, requireUserId } from "#/server/session";
 import { categorizeDescription, isAIVisible } from "#/server/ai";
 import { checkSpendCap } from "#/server/ai-usage.server";
@@ -1108,6 +1109,9 @@ async function* streamConfirmImport(
         };
       }
     }
+
+    // Once per import, after every row is written (never per row).
+    await checkBudgetsAfterWrite(userId);
   }
 
   yield {
