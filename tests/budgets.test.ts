@@ -711,9 +711,12 @@ describe("budget alerts", () => {
 
   it("retries on a later check after a failed send", async () => {
     await setup("100.00", 15000);
+    let failedAttempts = 0;
     await check(NOW, async () => {
+      failedAttempts++;
       throw new Error("smtp down");
     });
+    expect(failedAttempts).toBe(1);
     expect(sent).toHaveLength(0);
     await check();
     expect(sent).toHaveLength(1);
@@ -789,9 +792,13 @@ describe("budget alerts", () => {
     expect(sent[1]!.text).toContain("Alert Parent");
   });
 
-  it("never alerts for spending in earlier months", async () => {
-    const cat = await addCategory("Alert Old", null, alertUser);
-    const acc = await addAccount("PLN", alertUser);
+  it("never alerts for spending added in earlier months", async () => {
+    const { cat, acc } = await setup("100.00", 9000, "Alert Old");
+    await check();
+    expect(sent).toHaveLength(0);
+
+    // A backdated transaction would push a combined total over the limit,
+    // but only the budget month counts.
     await addTx({
       accountId: acc,
       categoryId: cat,
@@ -799,11 +806,6 @@ describe("budget alerts", () => {
       date: "2026-10-20",
       owner: alertUser,
     });
-    await createBudget(
-      alertUser,
-      { categoryId: cat, currency: "PLN", limit: "10.00" },
-      db,
-    );
     await check();
     expect(sent).toHaveLength(0);
   });
