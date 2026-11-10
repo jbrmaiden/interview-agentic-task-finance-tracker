@@ -478,7 +478,14 @@ function RemoveBudgetDialog({
         )}
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>{m.cancel()}</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+          <AlertDialogAction
+            variant="destructive"
+            onClick={(e) => {
+              // Keep the dialog open so a failure can be shown inside it.
+              e.preventDefault();
+              onConfirm();
+            }}
+          >
             {m.remove_budget_btn()}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -577,7 +584,13 @@ function BudgetsPage() {
   }) => {
     setFormError(null);
     setLimitReached(false);
-    const result = await createMutation.mutateAsync(input);
+    let result;
+    try {
+      result = await createMutation.mutateAsync(input);
+    } catch {
+      setFormError(m.budget_network_error());
+      return;
+    }
     if (result && "error" in result) {
       setFormError(errorMessage(result.code, result.error, result.limit));
       setLimitReached(result.code === "budget_limit_reached");
@@ -589,10 +602,16 @@ function BudgetsPage() {
   const handleEdit = async (limit: string) => {
     if (!editing) return;
     setEditError(null);
-    const result = await changeLimitMutation.mutateAsync({
-      id: editing.id,
-      limit,
-    });
+    let result;
+    try {
+      result = await changeLimitMutation.mutateAsync({
+        id: editing.id,
+        limit,
+      });
+    } catch {
+      setEditError(m.budget_network_error());
+      return;
+    }
     if (result && "error" in result) {
       setEditError(errorMessage(result.code, result.error));
       return;
@@ -603,7 +622,13 @@ function BudgetsPage() {
   const handleRemove = async () => {
     if (!removing) return;
     setRemoveError(null);
-    const result = await removeMutation.mutateAsync(removing.id);
+    let result;
+    try {
+      result = await removeMutation.mutateAsync(removing.id);
+    } catch {
+      setRemoveError(m.budget_network_error());
+      return;
+    }
     if (result && "error" in result) {
       setRemoveError(errorMessage(result.code, result.error));
       return;

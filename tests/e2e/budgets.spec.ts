@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect, type Page } from "./fixtures";
+import type { Route } from "@playwright/test";
 
 // Transactions are dated today (UTC) so they fall in the current budget month.
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -275,6 +276,56 @@ test.describe("Budgets", () => {
     await expect(
       page.getByText("Hobbies", { exact: true }).first(),
     ).toBeVisible();
+  });
+
+  test("shows a translated error when a request fails to reach the server", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await createCategory(page, "Offline");
+    await createCategory(page, "Flaky");
+    await addBudget(page, "Flaky", "50");
+    await expect(row(page, "Flaky")).toBeVisible();
+
+    const failWrites = (route: Route) =>
+      route.request().method() === "POST" ? route.abort() : route.continue();
+    await page.route("**/_serverFn/**", failWrites);
+
+    // Add: the dialog stays open with an error and is still usable.
+    const addDialog = await addBudget(page, "Offline", "10");
+    await expect(addDialog.getByRole("alert")).toHaveText(
+      "Couldn't reach the server. Please try again.",
+    );
+    await expect(
+      addDialog.getByRole("button", { name: "Create Budget" }),
+    ).toBeEnabled();
+    await addDialog.getByRole("button", { name: "Cancel" }).click();
+
+    // Edit
+    await row(page, "Flaky").getByTestId("edit-budget").click();
+    const editDialog = page.getByRole("dialog", { name: "Edit Budget" });
+    await editDialog.getByLabel("Monthly limit").fill("60");
+    await editDialog.getByRole("button", { name: "Save Budget" }).click();
+    await expect(editDialog.getByRole("alert")).toHaveText(
+      "Couldn't reach the server. Please try again.",
+    );
+    await expect(
+      editDialog.getByRole("button", { name: "Save Budget" }),
+    ).toBeEnabled();
+    await editDialog.getByRole("button", { name: "Cancel" }).click();
+
+    // Remove
+    await row(page, "Flaky").getByTestId("remove-budget").click();
+    const confirm = page.getByRole("alertdialog", { name: "Remove budget?" });
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(confirm.getByRole("alert")).toHaveText(
+      "Couldn't reach the server. Please try again.",
+    );
+
+    // Once the network is back, the same dialog works.
+    await page.unroute("**/_serverFn/**", failWrites);
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(row(page, "Flaky")).toBeHidden();
   });
 
   test("deleting a budgeted category (and its subcategory) removes its budgets", async ({

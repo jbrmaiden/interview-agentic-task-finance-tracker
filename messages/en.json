@@ -444,5 +444,6 @@
   "budget_upgrade_link": "Upgrade to Pro",
   "billing_budgets_usage": "{used} of {limit} budgets",
   "billing_budgets_unlimited": "{used} budgets (unlimited)",
-  "budget_allowance_reached": "You've used all {limit} budgets on the free plan."
+  "budget_allowance_reached": "You've used all {limit} budgets on the free plan.",
+  "budget_network_error": "Couldn't reach the server. Please try again."
 }
