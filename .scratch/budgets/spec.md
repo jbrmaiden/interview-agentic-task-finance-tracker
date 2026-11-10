@@ -8,7 +8,7 @@ Source: `TASK.md` (user story "Monthly category budgets"). Vocabulary: `GLOSSARY
 
 Users can see what they spent, per category and over time, but have no way to plan against it. There is nothing that says "I want to spend at most 1,000 PLN on Groceries this month", nothing that shows how much of that is left, and nothing that tells them when they have gone over. They can track spending but not control it.
 
-For the business, budgets are also a planned Pro upsell: a feature free users value enough to hit a limit on.
+For the business, budgets are also a planned Pro upsell: a feature free users value enough to use up the free budget allowance.
 
 ## Solution
 
@@ -16,7 +16,7 @@ A new **Budgets** page in the main navigation. On it a user adds a budget for a 
 
 When a budget is found over budget, the user receives one budget alert email for that budget that month, with the category, limit, spending, and overshoot, and a link back to the Budgets page.
 
-Free-plan users can hold up to 3 budgets; Pro users unlimited. Hitting the free limit shows an upgrade hint. Budgets are user data: they appear in the data export and are destroyed by account deletion like everything else.
+Free-plan users can hold up to 3 budgets; Pro users unlimited. Reaching the free budget allowance shows an upgrade hint up front. Budgets are user data: they appear in the data export and are destroyed by account deletion like everything else.
 
 ## User Stories
 
@@ -94,7 +94,7 @@ Free-plan users can hold up to 3 budgets; Pro users unlimited. Hitting the free 
 ### Plans
 
 54. As a free-plan user, I want to create up to 3 budgets, so that I can try the feature.
-55. As a free-plan user at 3 budgets, I want a clear message that the free plan is limited to 3 budgets, with a link to upgrade, so that I know how to get more.
+55. As a free-plan user at 3 budgets, I want "Add Budget" disabled and a clear message that the free plan is limited to 3 budgets, with a link to upgrade, so that I know how to get more.
 56. As a Pro user, I want unlimited budgets, so that I can plan every category.
 57. As a user who downgraded from Pro with more than 3 budgets, I want all my existing budgets to keep working and alerting, so that downgrading never destroys or locks my data; only adding new ones is blocked.
 58. As a user, I want the billing page's usage list to show how many budgets I'm using against my plan's allowance, so that I understand my plan.
@@ -124,7 +124,7 @@ Free-plan users can hold up to 3 budgets; Pro users unlimited. Hitting the free 
 - **Over budget:** spending strictly greater than limit.
 - **Overlap:** parent and child budgets coexist and are computed independently.
 - **Category tree changes:** spending is always computed live from the current category tree, so moving a category re-scopes budgets with no stored state to fix. Deleting a category (and its descendants) deletes every budget on any of those categories, together with their alert records, inside the existing category-deletion flow.
-- **Currency choices:** the distinct currencies of the user's accounts. The default is the currency of the account with the most transactions, falling back to PLN on a tie or when there are no transactions. With no accounts, budget creation is unavailable.
+- **Currency choices:** the distinct currencies of the user's accounts. The default is the currency of the account with the most transactions, on a tie or with no transactions, PLN if the user has it, otherwise their first currency. With no accounts, budget creation is unavailable.
 
 ### Budget alerts
 
@@ -132,7 +132,7 @@ Free-plan users can hold up to 3 budgets; Pro users unlimited. Hitting the free 
 - **At most once, retried on failure:** a ledger records one row per (budget, budget month). The check claims the row first with an insert that does nothing on conflict, so two concurrent checks can never both send. If the email send then fails, the claim is removed so a later check retries. This mirrors the Stripe-event idempotency ledger already in the codebase.
 - **Recipient:** only users with a verified email. A user without one is skipped without claiming, so a later check after verification still alerts.
 - **Strictness:** changing the limit never resets the month's alert.
-- **Triggers:** the check runs after every transaction change except deletion: manual create and edit, CSV import, a receipt scan that creates or updates a transaction, rule application and AI auto-categorisation, and transaction reassignment during category deletion. It also runs after a budget is created or its limit changes. The existing in-process hourly maintenance loop also runs the check for every user with at least one budget, as a backstop.
+- **Triggers:** the check runs after every transaction change except deletion: manual create and edit, CSV import, a receipt scan that creates or updates a transaction, rule application and AI auto-categorisation, and transaction reassignment during category deletion. It also runs after an account's currency changes, since spending counts by the account's current currency (accounts with no currency recorded count as PLN). It also runs after a budget is created or its limit changes. The existing in-process hourly maintenance loop also runs the check for every user with at least one budget, as a backstop.
 - **Failure isolation:** the check runs after the triggering write has succeeded; its errors are caught and logged, and never fail or roll back the user's action.
 - **Content:** subject and body come from the i18n message catalogue (as the existing account emails do), naming the category, limit, spending, and overshoot, formatted with the existing money formatter and the budget's currency, plus a link built from the configured app base URL.
 - **Logging:** ids and counts only.
@@ -140,7 +140,7 @@ Free-plan users can hold up to 3 budgets; Pro users unlimited. Hitting the free 
 ### Modules
 
 - **Budgets server module (new, deep):** the single owner of every budget rule. Public interface, roughly:
-  - list a user's budgets with progress (category name/colour/parent, currency, limit, spending, remaining, over-budget flag) for the budget month of a given `now`, plus the plan allowance and usage, the available currencies, and the default currency;
+  - list a user's budgets with progress (category name/colour, currency, limit, spending, remaining, over-budget flag) for the budget month of a given `now`, plus the plan allowance and usage, the available currencies, and the default currency;
   - create a budget (validates category ownership, currency availability, uniqueness, and the plan allowance);
   - change a budget's limit;
   - remove a budget (and its alert records);

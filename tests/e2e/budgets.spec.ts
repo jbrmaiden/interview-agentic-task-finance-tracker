@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect, type Page } from "./fixtures";
+import type { Route } from "@playwright/test";
 
 // Transactions are dated today (UTC) so they fall in the current budget month.
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -47,7 +48,7 @@ async function addBudget(page: Page, category: string, limit: string) {
 }
 
 const row = (page: Page, category: string) =>
-  page.getByTestId("budget-row").filter({ hasText: category });
+  page.getByRole("group", { name: category, exact: true });
 
 test.describe("Budgets", () => {
   test("is reachable from the sidebar and shows the budget month and an empty state", async ({
@@ -231,7 +232,7 @@ test.describe("Budgets", () => {
     await addBudget(page, "Pets", "100");
     await expect(row(page, "Pets")).toContainText("70.00 PLN left");
 
-    await row(page, "Pets").getByTestId("edit-budget").click();
+    await row(page, "Pets").getByRole("button", { name: "Edit" }).click();
     const dialog = page.getByRole("dialog", { name: "Edit Budget" });
     await expect(dialog.getByLabel("Category")).toHaveValue("Pets");
     await expect(dialog.getByLabel("Category")).toBeDisabled();
@@ -260,13 +261,13 @@ test.describe("Budgets", () => {
     await addBudget(page, "Hobbies", "50");
     await expect(row(page, "Hobbies")).toBeVisible();
 
-    await row(page, "Hobbies").getByTestId("remove-budget").click();
+    await row(page, "Hobbies").getByRole("button", { name: "Delete" }).click();
     const confirm = page.getByRole("alertdialog", { name: "Remove budget?" });
     await confirm.getByRole("button", { name: "Cancel" }).click();
     await expect(confirm).toBeHidden();
     await expect(row(page, "Hobbies")).toBeVisible();
 
-    await row(page, "Hobbies").getByTestId("remove-budget").click();
+    await row(page, "Hobbies").getByRole("button", { name: "Delete" }).click();
     await confirm.getByRole("button", { name: "Remove" }).click();
     await expect(row(page, "Hobbies")).toBeHidden();
     await expect(page.getByText("No budgets yet")).toBeVisible();
@@ -275,6 +276,56 @@ test.describe("Budgets", () => {
     await expect(
       page.getByText("Hobbies", { exact: true }).first(),
     ).toBeVisible();
+  });
+
+  test("shows a translated error when a request fails to reach the server", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await createCategory(page, "Offline");
+    await createCategory(page, "Flaky");
+    await addBudget(page, "Flaky", "50");
+    await expect(row(page, "Flaky")).toBeVisible();
+
+    const failWrites = (route: Route) =>
+      route.request().method() === "POST" ? route.abort() : route.continue();
+    await page.route("**/_serverFn/**", failWrites);
+
+    // Add: the dialog stays open with an error and is still usable.
+    const addDialog = await addBudget(page, "Offline", "10");
+    await expect(addDialog.getByRole("alert")).toHaveText(
+      "Couldn't reach the server. Please try again.",
+    );
+    await expect(
+      addDialog.getByRole("button", { name: "Create Budget" }),
+    ).toBeEnabled();
+    await addDialog.getByRole("button", { name: "Cancel" }).click();
+
+    // Edit
+    await row(page, "Flaky").getByRole("button", { name: "Edit" }).click();
+    const editDialog = page.getByRole("dialog", { name: "Edit Budget" });
+    await editDialog.getByLabel("Monthly limit").fill("60");
+    await editDialog.getByRole("button", { name: "Save Budget" }).click();
+    await expect(editDialog.getByRole("alert")).toHaveText(
+      "Couldn't reach the server. Please try again.",
+    );
+    await expect(
+      editDialog.getByRole("button", { name: "Save Budget" }),
+    ).toBeEnabled();
+    await editDialog.getByRole("button", { name: "Cancel" }).click();
+
+    // Remove
+    await row(page, "Flaky").getByRole("button", { name: "Delete" }).click();
+    const confirm = page.getByRole("alertdialog", { name: "Remove budget?" });
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(confirm.getByRole("alert")).toHaveText(
+      "Couldn't reach the server. Please try again.",
+    );
+
+    // Once the network is back, the same dialog works.
+    await page.unroute("**/_serverFn/**", failWrites);
+    await confirm.getByRole("button", { name: "Remove" }).click();
+    await expect(row(page, "Flaky")).toBeHidden();
   });
 
   test("deleting a budgeted category (and its subcategory) removes its budgets", async ({
@@ -287,7 +338,7 @@ test.describe("Budgets", () => {
     await addBudget(page, "Garden", "100");
     await addBudget(page, "— Seeds", "20");
     await addBudget(page, "Keepers", "30");
-    await expect(page.getByTestId("budget-row")).toHaveCount(3);
+    await expect(page.getByRole("region", { name: "Budgets" }).getByRole("group")).toHaveCount(3);
 
     await page.goto("/categories");
     const parentRow = page.getByRole("row").filter({ hasText: "Garden" });
@@ -300,7 +351,7 @@ test.describe("Budgets", () => {
 
     await page.goto("/budgets");
     await expect(row(page, "Keepers")).toBeVisible();
-    await expect(page.getByTestId("budget-row")).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "Budgets" }).getByRole("group")).toHaveCount(1);
   });
 });
 
@@ -311,25 +362,64 @@ test.describe("Budgets free-plan allowance", () => {
     return names;
   }
 
-  test("free users are blocked on the 4th budget with an upgrade link", async ({
+  test("the upgrade hint links through to billing", async ({
     page,
     signedInUser,
   }) => {
-    const names = await setup(page, signedInUser.username, 4);
-    for (const name of names.slice(0, 3)) {
-      const dialog = await addBudget(page, name, "100");
-      await expect(dialog).toBeHidden();
-      await expect(row(page, name)).toBeVisible();
+    const names = await setup(page, signedInUser.username, 3);
+    for (const name of names) {
+      await expect(await addBudget(page, name, "100")).toBeHidden();
     }
 
-    const dialog = await addBudget(page, names[3], "100");
-    await expect(
-      dialog.getByText(/free plan is limited to 3 budgets/i),
-    ).toBeVisible();
-    await dialog.getByRole("link", { name: "Upgrade to Pro" }).click();
+    await page
+      .getByRole("status", { name: "Budget allowance" })
+      .getByRole("link", { name: "Upgrade to Pro" })
+      .click();
     await expect(page).toHaveURL("/billing");
     await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
       "3 of 3 budgets",
+    );
+  });
+
+  test("free users at the allowance see Add Budget disabled and the upgrade hint up front", async ({
+    page,
+    signedInUser,
+  }) => {
+    const names = await setup(page, signedInUser.username, 3);
+    for (const name of names.slice(0, 2)) {
+      await expect(await addBudget(page, name, "100")).toBeHidden();
+    }
+    const addButton = page
+      .getByRole("banner")
+      .getByRole("button", { name: "Add Budget" });
+    const hint = page.getByRole("status", { name: "Budget allowance" });
+
+    // Below the allowance: enabled, no hint.
+    await expect(addButton).toBeEnabled();
+    await expect(hint).toBeHidden();
+
+    // At the allowance: disabled with the upgrade link, no submit needed.
+    await expect(await addBudget(page, names[2], "100")).toBeHidden();
+    await expect(addButton).toBeDisabled();
+    await expect(hint).toBeVisible();
+    await expect(
+      hint.getByRole("link", { name: "Upgrade to Pro" }),
+    ).toHaveAttribute("href", "/billing");
+
+    // Removing one frees an allowance slot.
+    await row(page, names[0]).getByRole("button", { name: "Delete" }).click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Remove", exact: true })
+      .click();
+    await expect(row(page, names[0])).toHaveCount(0);
+    await expect(addButton).toBeEnabled();
+    await expect(hint).toBeHidden();
+
+    // The billing usage line reflects the removal without a reload.
+    await page.getByRole("link", { name: "Billing" }).first().click();
+    await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
+      "2 of 3 budgets",
     );
   });
 
@@ -365,10 +455,10 @@ test.describe("Budgets free-plan allowance", () => {
     for (const name of names.slice(0, 4)) {
       await expect(row(page, name)).toBeVisible();
     }
-    const dialog = await addBudget(page, names[4], "100");
     await expect(
-      dialog.getByText(/free plan is limited to 3 budgets/i),
-    ).toBeVisible();
+      page.getByRole("banner").getByRole("button", { name: "Add Budget" }),
+    ).toBeDisabled();
+    await expect(page.getByRole("status", { name: "Budget allowance" })).toBeVisible();
     await page.goto("/billing");
     await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
       "4 of 3 budgets",

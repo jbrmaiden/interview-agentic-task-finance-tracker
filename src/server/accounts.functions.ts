@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, asc, count, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
+import { updateAccountForUser } from "#/server/accounts.server";
 import { checkAccountLimit } from "#/server/billing.server";
 import { requireUserId } from "#/server/session";
 
@@ -87,21 +88,11 @@ export const updateAccount = createServerFn({ method: "POST" })
   .inputValidator(updateAccountSchema)
   .handler(async ({ data }) => {
     const userId = await requireUserId();
-    await db
-      .update(schema.accounts)
-      .set({
-        name: data.name,
-        bank: data.bank || null,
-        currency: data.currency || "PLN",
-      })
-      .where(
-        and(
-          eq(schema.accounts.id, data.id),
-          eq(schema.accounts.user_id, userId),
-        ),
-      );
-
-    return { success: true };
+    return updateAccountForUser({
+      userId,
+      ...data,
+      currency: data.currency || "PLN",
+    });
   });
 
 export const deleteAccount = createServerFn({ method: "POST" })

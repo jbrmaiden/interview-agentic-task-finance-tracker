@@ -2,7 +2,7 @@ import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
 import { formatMoney, parseAmountToMinor } from "#/lib/money";
 import { m } from "#/paraglide/messages";
-import { checkBudgetLimit } from "#/server/billing.server";
+import { checkBudgetLimit, getEntitlements } from "#/server/billing.server";
 import { sendEmail, type EmailMessage } from "#/server/email";
 import { env } from "#/server/env";
 import { errorName, getLogger } from "#/server/logger";
@@ -19,7 +19,6 @@ export interface BudgetProgress {
   categoryId: string;
   categoryName: string;
   categoryColor: string | null;
-  categoryParentId: string | null;
   currency: string;
   limitMinor: number;
   spentMinor: number;
@@ -33,8 +32,15 @@ export interface BudgetsOverview {
   budgets: BudgetProgress[];
   /** Distinct currencies of the user's accounts. */
   currencies: string[];
-  /** Currency of the account with the most transactions; PLN on a tie/none. */
+  /**
+   * Currency of the account with the most transactions. On a tie or with no
+   * transactions: PLN if the user has it, else their first sorted currency.
+   */
   defaultCurrency: string;
+  /** How many budgets the plan permits; null = unlimited (paid plans). */
+  budgetAllowance: number | null;
+  /** How many budgets the user has. */
+  budgetsUsed: number;
 }
 
 /** "YYYY-MM-01" of the budget month containing `now` (UTC). */
@@ -109,7 +115,6 @@ export async function listBudgets(
       b.limit_minor,
       cat.name AS category_name,
       cat.color AS category_color,
-      cat.parent_id AS category_parent_id,
       COALESCE((
         SELECT SUM(ABS(tx.amount_minor))
         FROM tree t
@@ -119,7 +124,7 @@ export async function listBudgets(
           AND tx.user_id = ${userId}
           AND tx.amount_minor < 0
           AND tx.date >= ${from}::date AND tx.date < ${to}::date
-          AND a.currency = b.currency
+          AND COALESCE(a.currency, 'PLN') = b.currency
       ), 0)::bigint AS spent_minor
     FROM ${schema.budgets} b
     JOIN ${schema.categories} cat ON cat.id = b.category_id
@@ -137,7 +142,6 @@ export async function listBudgets(
       categoryId: r.category_id as string,
       categoryName: r.category_name as string,
       categoryColor: (r.category_color as string | null) ?? null,
-      categoryParentId: (r.category_parent_id as string | null) ?? null,
       currency: r.currency as string,
       limitMinor,
       spentMinor,
@@ -146,10 +150,13 @@ export async function listBudgets(
     };
   });
 
+  const { maxBudgets } = await getEntitlements(userId, db);
   return {
     month: from.slice(0, 7),
     budgets,
     ...(await loadCurrencies(userId, db)),
+    budgetAllowance: maxBudgets,
+    budgetsUsed: budgets.length,
   };
 }
 
@@ -336,6 +343,11 @@ export interface BudgetAlertCheckInput {
   send?: (message: EmailMessage) => Promise<void>;
 }
 
+/** Injectable collaborators of the alert check; all default to the real ones. */
+export type BudgetAlertDeps = Partial<
+  Pick<BudgetAlertCheckInput, "db" | "now" | "send">
+>;
+
 export interface BudgetAlertCheckResult {
   /** Alert emails sent by this check. */
   sent: number;
@@ -429,9 +441,15 @@ export async function runBudgetAlertCheck({
 export async function runBudgetAlertCheckSafely(
   userId: string,
   db: Db = defaultDb,
+  { now, send }: Omit<BudgetAlertDeps, "db"> = {},
 ): Promise<void> {
   try {
-    const { sent, failed } = await runBudgetAlertCheck({ userId, db });
+    const { sent, failed } = await runBudgetAlertCheck({
+      userId,
+      db,
+      now,
+      send,
+    });
     if (failed > 0) {
       getLogger().warn({ userId, sent, failed }, "budget alert sends failed");
     }
@@ -493,13 +511,15 @@ export async function runBudgetAlertCheckForAllUsers({
 }
 
 /**
- * The one call every transaction write path makes once its write succeeded.
- * Bulk paths pass whether anything changed so an empty request does no work.
+ * The one call every write that can change budget spending makes once it
+ * succeeded: transaction writes and an account's currency change. Bulk paths
+ * pass whether anything changed so an empty request does no work.
  * Never throws (see `runBudgetAlertCheckSafely`).
  */
 export async function checkBudgetsAfterWrite(
   userId: string,
   changed = true,
+  { db, now, send }: BudgetAlertDeps = {},
 ): Promise<void> {
-  if (changed) await runBudgetAlertCheckSafely(userId);
+  if (changed) await runBudgetAlertCheckSafely(userId, db, { now, send });
 }

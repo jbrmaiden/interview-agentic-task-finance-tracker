@@ -35,6 +35,8 @@ import {
 import { getCategories } from "#/server/categories.functions";
 import { formatMinor, formatMoney, parseAmountToMinor } from "#/lib/money";
 
+import { BILLING_QUERY_KEY } from "#/lib/query-keys";
+
 const BUDGETS_QUERY_KEY = ["budgets"] as const;
 const CATEGORIES_QUERY_KEY = ["categories"] as const;
 
@@ -259,7 +261,8 @@ function BudgetItem({
   return (
     <div
       className="px-3 py-3 space-y-2"
-      data-testid="budget-row"
+      role="group"
+      aria-label={budget.categoryName}
       data-over-budget={budget.overBudget}
       style={{ paddingLeft: `${depth * 24 + 12}px` }}
     >
@@ -300,14 +303,8 @@ function BudgetItem({
           </span>
         )}
         <span className="flex gap-1.5">
-          <EditButton
-            onClick={() => onEdit(budget)}
-            data-testid="edit-budget"
-          />
-          <DeleteButton
-            onClick={() => onRemove(budget)}
-            data-testid="remove-budget"
-          />
+          <EditButton onClick={() => onEdit(budget)} />
+          <DeleteButton onClick={() => onRemove(budget)} />
         </span>
       </div>
       <div
@@ -443,11 +440,13 @@ function EditBudgetForm({
 function RemoveBudgetDialog({
   budget,
   error,
+  pending,
   onCancel,
   onConfirm,
 }: {
   budget: BudgetRow | null;
   error: string | null;
+  pending: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -476,7 +475,15 @@ function RemoveBudgetDialog({
         )}
         <AlertDialogFooter>
           <AlertDialogCancel onClick={onCancel}>{m.cancel()}</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={onConfirm}>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={pending}
+            onClick={(e) => {
+              // Keep the dialog open so a failure can be shown inside it.
+              e.preventDefault();
+              onConfirm();
+            }}
+          >
             {m.remove_budget_btn()}
           </AlertDialogAction>
         </AlertDialogFooter>
@@ -486,6 +493,22 @@ function RemoveBudgetDialog({
 }
 
 // --- Page ---
+
+/**
+ * Run a mutation; on a network-level failure show the network error through
+ * `setError` and return null so the caller just stops.
+ */
+async function attempt<T extends object>(
+  run: () => Promise<T>,
+  setError: (message: string) => void,
+): Promise<T | null> {
+  try {
+    return await run();
+  } catch {
+    setError(m.budget_network_error());
+    return null;
+  }
+}
 
 function BudgetsPage() {
   const queryClient = useQueryClient();
@@ -514,6 +537,7 @@ function BudgetsPage() {
     }) => createBudgetServerFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BUDGETS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: BILLING_QUERY_KEY });
     },
   });
 
@@ -528,6 +552,7 @@ function BudgetsPage() {
     mutationFn: (id: string) => removeBudgetServerFn({ data: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BUDGETS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: BILLING_QUERY_KEY });
     },
   });
 
@@ -543,8 +568,13 @@ function BudgetsPage() {
   const budgets = data?.budgets ?? [];
   const currencies = data?.currencies ?? [];
   const hasAccounts = currencies.length > 0;
+  const allowance = data?.budgetAllowance ?? null;
+  const allowanceUsedUp =
+    allowance !== null && (data?.budgetsUsed ?? 0) >= allowance;
 
-  // Nest a budget under its parent's budget when both share a currency.
+  // Follow the category tree order (parents before their subcategories), then
+  // currency. Indentation reflects category depth, whether or not the parent
+  // category has a budget of its own.
   const ordered = useMemo(() => {
     const order = new Map(
       flattenCategoryTree(categories).map((c, i) => [c.id, i] as const),
@@ -570,8 +600,12 @@ function BudgetsPage() {
   }) => {
     setFormError(null);
     setLimitReached(false);
-    const result = await createMutation.mutateAsync(input);
-    if (result && "error" in result) {
+    const result = await attempt(
+      () => createMutation.mutateAsync(input),
+      setFormError,
+    );
+    if (!result) return;
+    if ("error" in result) {
       setFormError(errorMessage(result.code, result.error, result.limit));
       setLimitReached(result.code === "budget_limit_reached");
       return;
@@ -582,11 +616,12 @@ function BudgetsPage() {
   const handleEdit = async (limit: string) => {
     if (!editing) return;
     setEditError(null);
-    const result = await changeLimitMutation.mutateAsync({
-      id: editing.id,
-      limit,
-    });
-    if (result && "error" in result) {
+    const result = await attempt(
+      () => changeLimitMutation.mutateAsync({ id: editing.id, limit }),
+      setEditError,
+    );
+    if (!result) return;
+    if ("error" in result) {
       setEditError(errorMessage(result.code, result.error));
       return;
     }
@@ -596,8 +631,12 @@ function BudgetsPage() {
   const handleRemove = async () => {
     if (!removing) return;
     setRemoveError(null);
-    const result = await removeMutation.mutateAsync(removing.id);
-    if (result && "error" in result) {
+    const result = await attempt(
+      () => removeMutation.mutateAsync(removing.id),
+      setRemoveError,
+    );
+    if (!result) return;
+    if ("error" in result) {
       setRemoveError(errorMessage(result.code, result.error));
       return;
     }
@@ -625,14 +664,29 @@ function BudgetsPage() {
             )}
           </div>
           {hasAccounts && (
-            <Button
-              onClick={() => {
-                setFormError(null);
-                setIsFormOpen(true);
-              }}
-            >
-              {m.add_budget()}
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                disabled={allowanceUsedUp}
+                onClick={() => {
+                  setFormError(null);
+                  setIsFormOpen(true);
+                }}
+              >
+                {m.add_budget()}
+              </Button>
+              {allowanceUsedUp && (
+                <p
+                  className="text-xs text-muted-foreground"
+                  role="status"
+                  aria-label={m.budget_allowance_hint_label()}
+                >
+                  {m.budget_allowance_reached({ allowance })}
+                  <Link to="/billing" className="ml-1 underline font-medium">
+                    {m.budget_upgrade_link()}
+                  </Link>
+                </p>
+              )}
+            </div>
           )}
         </div>
       </header>
@@ -667,7 +721,11 @@ function BudgetsPage() {
             </p>
           </div>
         ) : (
-          <div className="island-shell rounded-xl overflow-hidden divide-y divide-line/30">
+          <div
+            role="region"
+            aria-label={m.budget_list_label()}
+            className="island-shell rounded-xl overflow-hidden divide-y divide-line/30"
+          >
             {ordered.map((b) => (
               <BudgetItem
                 key={b.id}
@@ -718,6 +776,7 @@ function BudgetsPage() {
       <RemoveBudgetDialog
         budget={removing}
         error={removeError}
+        pending={removeMutation.isPending}
         onCancel={() => {
           setRemoving(null);
           setRemoveError(null);

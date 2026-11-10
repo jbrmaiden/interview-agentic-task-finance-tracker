@@ -4,5 +4,5 @@ Accounts can hold different currencies, and the app has no exchange rates. A bud
 
 ## Consequences
 
-- "Groceries PLN" and "Groceries USD" are two budgets and count as two toward the free-plan limit.
+- "Groceries PLN" and "Groceries USD" are two budgets and count as two toward the free plan's Budget allowance.
 - Changing a budget's currency means removing it and adding a new one.
