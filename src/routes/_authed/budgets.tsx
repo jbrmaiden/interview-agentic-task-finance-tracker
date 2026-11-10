@@ -667,9 +667,10 @@ function BudgetsPage() {
               {allowanceUsedUp && (
                 <p
                   className="text-xs text-muted-foreground"
-                  data-testid="budget-allowance-hint"
+                  role="status"
+                  aria-label={m.budget_allowance_hint_label()}
                 >
-                  {m.budget_allowance_reached({ limit: allowance })}
+                  {m.budget_allowance_reached({ allowance })}
                   <Link to="/billing" className="ml-1 underline font-medium">
                     {m.budget_upgrade_link()}
                   </Link>
@@ -710,7 +711,11 @@ function BudgetsPage() {
             </p>
           </div>
         ) : (
-          <div className="island-shell rounded-xl overflow-hidden divide-y divide-line/30">
+          <div
+            role="region"
+            aria-label={m.budget_list_label()}
+            className="island-shell rounded-xl overflow-hidden divide-y divide-line/30"
+          >
             {ordered.map((b) => (
               <BudgetItem
                 key={b.id}

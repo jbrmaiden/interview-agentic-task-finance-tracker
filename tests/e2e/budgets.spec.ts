@@ -338,7 +338,7 @@ test.describe("Budgets", () => {
     await addBudget(page, "Garden", "100");
     await addBudget(page, "— Seeds", "20");
     await addBudget(page, "Keepers", "30");
-    await expect(page.getByRole("main").getByRole("group")).toHaveCount(3);
+    await expect(page.getByRole("region", { name: "Budgets" }).getByRole("group")).toHaveCount(3);
 
     await page.goto("/categories");
     const parentRow = page.getByRole("row").filter({ hasText: "Garden" });
@@ -351,7 +351,7 @@ test.describe("Budgets", () => {
 
     await page.goto("/budgets");
     await expect(row(page, "Keepers")).toBeVisible();
-    await expect(page.getByRole("main").getByRole("group")).toHaveCount(1);
+    await expect(page.getByRole("region", { name: "Budgets" }).getByRole("group")).toHaveCount(1);
   });
 });
 
@@ -362,25 +362,17 @@ test.describe("Budgets free-plan allowance", () => {
     return names;
   }
 
-  test("free users cannot add a 4th budget and get an upgrade link", async ({
+  test("the upgrade hint links through to billing", async ({
     page,
     signedInUser,
   }) => {
-    const names = await setup(page, signedInUser.username, 4);
-    for (const name of names.slice(0, 3)) {
-      const dialog = await addBudget(page, name, "100");
-      await expect(dialog).toBeHidden();
-      await expect(row(page, name)).toBeVisible();
+    const names = await setup(page, signedInUser.username, 3);
+    for (const name of names) {
+      await expect(await addBudget(page, name, "100")).toBeHidden();
     }
 
-    // The allowance is used up, so the form can't even be opened; the server
-    // block is covered by the budgets unit tests.
-    await page.goto("/budgets");
-    await expect(
-      page.getByRole("banner").getByRole("button", { name: "Add Budget" }),
-    ).toBeDisabled();
     await page
-      .getByTestId("budget-allowance-hint")
+      .getByRole("status", { name: "Budget allowance" })
       .getByRole("link", { name: "Upgrade to Pro" })
       .click();
     await expect(page).toHaveURL("/billing");
@@ -400,7 +392,7 @@ test.describe("Budgets free-plan allowance", () => {
     const addButton = page
       .getByRole("banner")
       .getByRole("button", { name: "Add Budget" });
-    const hint = page.getByTestId("budget-allowance-hint");
+    const hint = page.getByRole("status", { name: "Budget allowance" });
 
     // Below the allowance: enabled, no hint.
     await expect(addButton).toBeEnabled();
@@ -466,7 +458,7 @@ test.describe("Budgets free-plan allowance", () => {
     await expect(
       page.getByRole("banner").getByRole("button", { name: "Add Budget" }),
     ).toBeDisabled();
-    await expect(page.getByTestId("budget-allowance-hint")).toBeVisible();
+    await expect(page.getByRole("status", { name: "Budget allowance" })).toBeVisible();
     await page.goto("/billing");
     await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
       "4 of 3 budgets",
