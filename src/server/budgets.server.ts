@@ -119,7 +119,7 @@ export async function listBudgets(
           AND tx.user_id = ${userId}
           AND tx.amount_minor < 0
           AND tx.date >= ${from}::date AND tx.date < ${to}::date
-          AND a.currency = b.currency
+          AND COALESCE(a.currency, 'PLN') = b.currency
       ), 0)::bigint AS spent_minor
     FROM ${schema.budgets} b
     JOIN ${schema.categories} cat ON cat.id = b.category_id
