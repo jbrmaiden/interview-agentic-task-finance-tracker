@@ -6,7 +6,7 @@ Spec: `.scratch/budgets/spec.md` (user stories 1–33, 62–63). Vocabulary: `GL
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] New migration adds the budgets table: owner, category, currency, limit in integer minor units, created/updated timestamps; unique on (user, category, currency); indexed by user. Existing tables unchanged.
 - [ ] Budgets server module exposes "list budgets with progress" for an injectable `now` (plus available currencies and the default currency) and "create budget"; server functions wrap them with zod validation and session user resolution.
