@@ -6,7 +6,7 @@ Spec: `.scratch/budgets/spec.md` (user stories 54–59).
 
 **Blocked by:** 01 (Budgets page — add a budget and see its progress)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] New env setting `BILLING_FREE_MAX_BUDGETS`, default 3, validated as a positive integer like `BILLING_FREE_MAX_ACCOUNTS`; documented in the example env file.
 - [ ] Entitlements gain `maxBudgets` (a number on Free, `null` = unlimited on Pro); plan checks stay in the billing module, none in UI code.

@@ -437,5 +437,9 @@
   "budget_not_found": "That budget no longer exists.",
   "remove_budget_title": "Remove budget?",
   "remove_budget_confirm": "Remove the {category} budget ({currency})? Your transactions and categories are not affected.",
-  "remove_budget_btn": "Remove"
+  "remove_budget_btn": "Remove",
+  "budget_limit_reached": "The free plan is limited to {limit} budgets. Upgrade to Pro for unlimited budgets.",
+  "budget_upgrade_link": "Upgrade to Pro",
+  "billing_budgets_usage": "{used} of {limit} budgets",
+  "billing_budgets_unlimited": "{used} budgets (unlimited)"
 }
