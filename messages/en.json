@@ -431,5 +431,9 @@
   "budget_left": "{amount} left",
   "budget_over_by": "Over by {amount}",
   "budget_over_label": "Over budget",
-  "budget_progress_label": "{category} budget progress"
+  "budget_progress_label": "{category} budget progress",
+  "budget_limit_reached": "The free plan is limited to {limit} budgets. Upgrade to Pro for unlimited budgets.",
+  "budget_upgrade_link": "Upgrade to Pro",
+  "billing_budgets_usage": "{used} of {limit} budgets",
+  "billing_budgets_unlimited": "{used} budgets (unlimited)"
 }

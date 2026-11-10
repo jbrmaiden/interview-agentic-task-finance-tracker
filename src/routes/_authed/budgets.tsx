@@ -55,8 +55,14 @@ function flattenCategoryTree(
   return out;
 }
 
-function errorMessage(code: string | undefined, fallback: string | null) {
+function errorMessage(
+  code: string | undefined,
+  fallback: string | null,
+  limit?: number,
+) {
   switch (code) {
+    case "budget_limit_reached":
+      return m.budget_limit_reached({ limit: limit ?? 0 });
     case "category_not_found":
       return m.budget_category_not_found();
     case "currency_unavailable":
@@ -78,6 +84,7 @@ function BudgetForm({
   currencies,
   defaultCurrency,
   error,
+  upgradeLink,
   onClose,
   onSubmit,
 }: {
@@ -86,6 +93,7 @@ function BudgetForm({
   currencies: string[];
   defaultCurrency: string;
   error: string | null;
+  upgradeLink?: React.ReactNode;
   onClose: () => void;
   onSubmit: (data: {
     categoryId: string;
@@ -190,6 +198,7 @@ function BudgetForm({
           {(validationError || error) && (
             <div className="text-destructive text-sm" role="alert">
               {validationError ?? error}
+              {upgradeLink}
             </div>
           )}
 
@@ -314,6 +323,7 @@ function BudgetsPage() {
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [limitReached, setLimitReached] = useState(false);
 
   const budgets = data?.budgets ?? [];
   const currencies = data?.currencies ?? [];
@@ -344,9 +354,11 @@ function BudgetsPage() {
     limit: string;
   }) => {
     setFormError(null);
+    setLimitReached(false);
     const result = await createMutation.mutateAsync(input);
     if (result && "error" in result) {
-      setFormError(errorMessage(result.code, result.error));
+      setFormError(errorMessage(result.code, result.error, result.limit));
+      setLimitReached(result.code === "budget_limit_reached");
       return;
     }
     setIsFormOpen(false);
@@ -433,6 +445,13 @@ function BudgetsPage() {
         currencies={currencies}
         defaultCurrency={data?.defaultCurrency ?? "PLN"}
         error={formError}
+        upgradeLink={
+          limitReached ? (
+            <Link to="/billing" className="ml-1 underline font-medium">
+              {m.budget_upgrade_link()}
+            </Link>
+          ) : null
+        }
         onClose={() => {
           setIsFormOpen(false);
           setFormError(null);

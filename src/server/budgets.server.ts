@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
 import { parseAmountToMinor } from "#/lib/money";
+import { checkBudgetLimit } from "#/server/billing.server";
 
 //
 // The single owner of every budget rule (see GLOSSARY.md and ADR 0001).
@@ -158,11 +159,12 @@ export type BudgetErrorCode =
   | "invalid_limit"
   | "category_not_found"
   | "currency_unavailable"
-  | "budget_exists";
+  | "budget_exists"
+  | "budget_limit_reached";
 
 export type CreateBudgetResult =
   | { id: string }
-  | { error: string; code: BudgetErrorCode };
+  | { error: string; code: BudgetErrorCode; limit?: number };
 
 export async function createBudget(
   userId: string,
@@ -192,6 +194,11 @@ export async function createBudget(
   const { currencies } = await loadCurrencies(userId, db);
   if (!currencies.includes(input.currency)) {
     return { error: "Currency not available", code: "currency_unavailable" };
+  }
+
+  const gate = await checkBudgetLimit(userId, db);
+  if (!gate.allowed) {
+    return { error: gate.error, code: gate.code, limit: gate.limit };
   }
 
   const id = crypto.randomUUID();
