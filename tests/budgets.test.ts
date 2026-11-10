@@ -273,6 +273,49 @@ describe("budgets module", () => {
     await addTx({ accountId: pln, categoryId: food, amountMinor: -1, date: "2026-11-02" });
     expect((await listBudgets(userId, NOW, db)).defaultCurrency).toBe("PLN");
   });
+
+  it("defaults to a currency the user actually has", async () => {
+    await addAccount("USD");
+    expect((await listBudgets(userId, NOW, db)).defaultCurrency).toBe("USD");
+  });
+
+  it("defaults to the first sorted currency on a tie without PLN", async () => {
+    await addAccount("USD");
+    await addAccount("EUR");
+    expect((await listBudgets(userId, NOW, db)).defaultCurrency).toBe("EUR");
+  });
+
+  it("rejects a limit above the integer column maximum on create", async () => {
+    const food = await addCategory("Food");
+    await addAccount("PLN");
+    expect(await budgetOn(food, "21474836.48")).toMatchObject({
+      code: "invalid_limit",
+    });
+    expect(await budgetOn(food, "21474836.47")).toHaveProperty("id");
+  });
+
+  it("computes parent and child budgets on the same tree independently", async () => {
+    const food = await addCategory("Food");
+    const restaurants = await addCategory("Restaurants", food);
+    const groceries = await addCategory("Groceries", food);
+    const acc = await addAccount("PLN");
+    await addTx({ accountId: acc, categoryId: restaurants, amountMinor: -100, date: "2026-11-02" });
+    await addTx({ accountId: acc, categoryId: groceries, amountMinor: -50, date: "2026-11-03" });
+    await budgetOn(food);
+    await budgetOn(restaurants);
+    expect((await spentFor(food)).spentMinor).toBe(150);
+    expect((await spentFor(restaurants)).spentMinor).toBe(100);
+  });
+
+  it("reports spending as a safe integer", async () => {
+    const food = await addCategory("Food");
+    const acc = await addAccount("PLN");
+    await addTx({ accountId: acc, categoryId: food, amountMinor: -123, date: "2026-11-02" });
+    await budgetOn(food);
+    const { spentMinor } = await spentFor(food);
+    expect(Number.isSafeInteger(spentMinor)).toBe(true);
+    expect(spentMinor).toBe(123);
+  });
 });
 
 describe("budgets module: change, remove, category changes", () => {
@@ -433,6 +476,17 @@ describe("budgets module: change, remove, category changes", () => {
       .set({ parent_id: fun })
       .where(eq(schema.categories.id, cinema));
     expect(await spent()).toBe(100);
+  });
+
+  it("caps the new limit at the integer column maximum", async () => {
+    const food = await addCategory("Food");
+    await addAccount("PLN");
+    const id = await create(food, "100");
+    expect(await changeBudgetLimit(userId, id, "21474836.48", db)).toMatchObject({
+      code: "invalid_limit",
+    });
+    expect(await changeBudgetLimit(userId, id, "21474836.47", db)).toEqual({ id });
+    expect((await list())[0]!.limitMinor).toBe(2147483647);
   });
 });
 

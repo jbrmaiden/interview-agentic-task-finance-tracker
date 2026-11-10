@@ -68,14 +68,15 @@ async function loadCurrencies(
     ...new Set(rows.map((r) => r.currency ?? "PLN")),
   ].sort();
 
-  // Currency of the account with the most transactions; PLN when there are
-  // none or when accounts in different currencies tie for the most.
+  // Currency of the account with the most transactions. On a tie or with no
+  // transactions: PLN if the user has it, else their first sorted currency.
+  const fallback = currencies.includes("PLN") ? "PLN" : (currencies[0] ?? "PLN");
   const top = Math.max(0, ...rows.map((r) => r.txCount));
   const topCurrencies = new Set(
     rows.filter((r) => r.txCount === top).map((r) => r.currency ?? "PLN"),
   );
   const defaultCurrency =
-    top > 0 && topCurrencies.size === 1 ? [...topCurrencies][0]! : "PLN";
+    top > 0 && topCurrencies.size === 1 ? [...topCurrencies][0]! : fallback;
   return { currencies, defaultCurrency };
 }
 
@@ -115,7 +116,7 @@ export async function listBudgets(
           AND tx.amount_minor < 0
           AND tx.date >= ${from}::date AND tx.date < ${to}::date
           AND a.currency = b.currency
-      ), 0)::float8 AS spent_minor
+      ), 0)::bigint AS spent_minor
     FROM ${schema.budgets} b
     JOIN ${schema.categories} cat ON cat.id = b.category_id
     WHERE b.user_id = ${userId}
@@ -148,6 +149,16 @@ export async function listBudgets(
   };
 }
 
+/** Postgres `integer` maximum, the type of `budgets.limit_minor`. */
+const MAX_LIMIT_MINOR = 2147483647;
+
+/** Parse a typed limit; null when not a positive amount that fits the column. */
+function parseLimit(limit: string): number | null {
+  const minor = parseAmountToMinor(limit);
+  if (minor === null || minor <= 0 || minor > MAX_LIMIT_MINOR) return null;
+  return minor;
+}
+
 export type CreateBudgetInput = {
   categoryId: string;
   currency: string;
@@ -171,8 +182,8 @@ export async function createBudget(
   input: CreateBudgetInput,
   db: Db = defaultDb,
 ): Promise<CreateBudgetResult> {
-  const limitMinor = parseAmountToMinor(input.limit);
-  if (limitMinor === null || limitMinor <= 0) {
+  const limitMinor = parseLimit(input.limit);
+  if (limitMinor === null) {
     return { error: "Limit must be a positive amount", code: "invalid_limit" };
   }
 
@@ -234,8 +245,8 @@ export async function changeBudgetLimit(
   limit: string,
   db: Db = defaultDb,
 ): Promise<ChangeBudgetLimitResult> {
-  const limitMinor = parseAmountToMinor(limit);
-  if (limitMinor === null || limitMinor <= 0) {
+  const limitMinor = parseLimit(limit);
+  if (limitMinor === null) {
     return { error: "Limit must be a positive amount", code: "invalid_limit" };
   }
   // Ownership in the same query: foreign budget == missing budget.
