@@ -553,7 +553,9 @@ function BudgetsPage() {
   const allowanceUsedUp =
     allowance !== null && (data?.budgetsUsed ?? 0) >= allowance;
 
-  // Nest a budget under its parent's budget when both share a currency.
+  // Follow the category tree order (parents before their subcategories), then
+  // currency. Indentation reflects category depth, whether or not the parent
+  // category has a budget of its own.
   const ordered = useMemo(() => {
     const order = new Map(
       flattenCategoryTree(categories).map((c, i) => [c.id, i] as const),
