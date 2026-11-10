@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Required: TanStack Start's import protection mocks server modules in jsdom (client) environment.
 
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/db/index.ts";
 import {
@@ -11,6 +11,7 @@ import {
   listBudgets,
   removeBudget,
   removeBudgetsForCategories,
+  runBudgetAlertCheckSafely,
 } from "../src/server/budgets.server.ts";
 
 const userId = "budgets-test-user";
@@ -789,5 +790,35 @@ describe("budget alerts", () => {
       .from(schema.budget_alerts)
       .where(eq(schema.budget_alerts.user_id, alertUser));
     expect(left).toHaveLength(0);
+  });
+});
+
+describe("runBudgetAlertCheckSafely logging", () => {
+  it("never logs the error message, which may carry SQL and parameters", async () => {
+    const logged: unknown[] = [];
+    const logger = await import("../src/server/logger.ts");
+    const spy = vi.spyOn(logger, "getLogger").mockReturnValue({
+      error: (...args: unknown[]) => logged.push(args),
+      warn: (...args: unknown[]) => logged.push(args),
+    } as unknown as ReturnType<typeof logger.getLogger>);
+    const failingDb = {
+      select: () => {
+        throw new Error(
+          "Failed query: select email from users params: super-secret@example.com",
+        );
+      },
+    } as unknown as typeof db;
+
+    try {
+      await runBudgetAlertCheckSafely("log-leak-user", failingDb);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(logged).toHaveLength(1);
+    const text = JSON.stringify(logged);
+    expect(text).toContain("log-leak-user");
+    expect(text).not.toContain("Failed query");
+    expect(text).not.toContain("super-secret");
   });
 });

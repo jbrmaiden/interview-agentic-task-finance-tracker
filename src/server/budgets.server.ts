@@ -414,19 +414,28 @@ export async function runBudgetAlertCheck({
   return result;
 }
 
+/** Class name of an error, safe to log (unlike its message). */
+function errorName(err: unknown): string {
+  return err instanceof Error ? err.name : "unknown";
+}
+
 /**
  * Run the alert check after a triggering write. Never throws: failures are
  * logged with ids and counts only and must not fail the user's action.
  */
-export async function runBudgetAlertCheckSafely(userId: string): Promise<void> {
+export async function runBudgetAlertCheckSafely(
+  userId: string,
+  db: Db = defaultDb,
+): Promise<void> {
   try {
-    const { sent, failed } = await runBudgetAlertCheck({ userId });
+    const { sent, failed } = await runBudgetAlertCheck({ userId, db });
     if (failed > 0) {
       getLogger().warn({ userId, sent, failed }, "budget alert sends failed");
     }
   } catch (err) {
+    // Never the message: database errors embed the failed SQL and its params.
     getLogger().error(
-      { userId, err: err instanceof Error ? err.message : "unknown" },
+      { userId, errorName: errorName(err) },
       "budget alert check failed",
     );
   }
