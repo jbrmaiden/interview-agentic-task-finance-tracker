@@ -719,6 +719,39 @@ describe("budget alerts", () => {
     expect(sent).toHaveLength(1);
   });
 
+  it("keeps alerting other budgets when releasing a failed send's claim fails", async () => {
+    await setup("10.00", 5000, "Alert A");
+    await setup("10.00", 5000, "Alert B");
+    const releaseFails = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "delete") {
+          return (table: Parameters<typeof db.delete>[0]) => {
+            if (table === schema.budget_alerts) throw new Error("db down");
+            return target.delete(table);
+          };
+        }
+        const value = Reflect.get(target, prop, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    let attempts = 0;
+    const firstSendFails = async (msg: { to: string; subject: string; text: string }) => {
+      if (++attempts === 1) throw new Error("smtp down");
+      sent.push(msg);
+    };
+
+    const result = await runBudgetAlertCheck({
+      userId: alertUser,
+      now: NOW,
+      db: releaseFails,
+      send: firstSendFails,
+    });
+
+    expect(result).toEqual({ sent: 1, failed: 1 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain("Alert B");
+  });
+
   it("alerts parent and child budgets independently", async () => {
     const parent = await addCategory("Alert Parent", null, alertUser);
     const child = await addCategory("Alert Child", parent, alertUser);

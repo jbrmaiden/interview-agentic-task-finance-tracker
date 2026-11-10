@@ -401,14 +401,22 @@ export async function runBudgetAlertCheck({
       result.sent++;
     } catch {
       result.failed++;
-      await db
-        .delete(schema.budget_alerts)
-        .where(
-          and(
-            eq(schema.budget_alerts.budget_id, budget.id),
-            eq(schema.budget_alerts.month, month),
-          ),
+      try {
+        await db
+          .delete(schema.budget_alerts)
+          .where(
+            and(
+              eq(schema.budget_alerts.budget_id, budget.id),
+              eq(schema.budget_alerts.month, month),
+            ),
+          );
+      } catch (err) {
+        // Keep going: one stuck claim must not stop the other budgets.
+        getLogger().error(
+          { userId, budgetId: budget.id, month, errorName: errorName(err) },
+          "budget alert claim release failed",
         );
+      }
     }
   }
   return result;
