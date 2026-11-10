@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, asc, count, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
-import { checkBudgetsAfterWrite } from "#/server/budgets.server";
+import { updateAccountForUser } from "#/server/accounts.server";
 import { checkAccountLimit } from "#/server/billing.server";
 import { requireUserId } from "#/server/session";
 
@@ -88,39 +88,11 @@ export const updateAccount = createServerFn({ method: "POST" })
   .inputValidator(updateAccountSchema)
   .handler(async ({ data }) => {
     const userId = await requireUserId();
-    const currency = data.currency || "PLN";
-    const [before] = await db
-      .select({ currency: schema.accounts.currency })
-      .from(schema.accounts)
-      .where(
-        and(
-          eq(schema.accounts.id, data.id),
-          eq(schema.accounts.user_id, userId),
-        ),
-      )
-      .limit(1);
-    await db
-      .update(schema.accounts)
-      .set({
-        name: data.name,
-        bank: data.bank || null,
-        currency,
-      })
-      .where(
-        and(
-          eq(schema.accounts.id, data.id),
-          eq(schema.accounts.user_id, userId),
-        ),
-      );
-
-    // Spending counts toward budgets by the account's current currency, so a
-    // currency change can push a budget over its limit.
-    await checkBudgetsAfterWrite(
+    return updateAccountForUser({
       userId,
-      before !== undefined && (before.currency ?? "PLN") !== currency,
-    );
-
-    return { success: true };
+      ...data,
+      currency: data.currency || "PLN",
+    });
   });
 
 export const deleteAccount = createServerFn({ method: "POST" })

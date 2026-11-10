@@ -14,6 +14,7 @@ import {
   runBudgetAlertCheckSafely,
   runBudgetAlertCheckForAllUsers,
 } from "../src/server/budgets.server.ts";
+import { updateAccountForUser } from "../src/server/accounts.server.ts";
 
 const userId = "budgets-test-user";
 const otherUserId = "budgets-test-other";
@@ -907,33 +908,75 @@ describe("budget alerts", () => {
     expect(sent).toHaveLength(1);
   });
 
-  it("alerts once when an account's currency change moves spending into an over-budget currency", async () => {
-    const cat = await addCategory("Moved Food", null, alertUser);
-    await addAccount("PLN", alertUser);
-    const usd = await addAccount("USD", alertUser);
-    await addTx({
-      accountId: usd,
-      categoryId: cat,
-      amountMinor: -15000,
-      date: "2026-11-03",
-      owner: alertUser,
-    });
-    const created = await createBudget(
-      alertUser,
-      { categoryId: cat, currency: "PLN", limit: "100.00" },
-      db,
-    );
-    if (!("id" in created)) throw new Error("budget not created");
-    await check();
-    expect(sent).toHaveLength(0);
+  describe("updating an account", () => {
+    const update = (
+      accountId: string,
+      currency: string,
+      owner = alertUser,
+    ) =>
+      updateAccountForUser(
+        { userId: owner, id: accountId, name: "Renamed", bank: "", currency },
+        { db, now: NOW, send },
+      );
 
-    await db
-      .update(schema.accounts)
-      .set({ currency: "PLN" })
-      .where(eq(schema.accounts.id, usd));
-    await check();
-    await check();
-    expect(sent).toHaveLength(1);
+    async function overBudgetInPln(accountCurrency: string | null) {
+      const cat = await addCategory("Moved Food", null, alertUser);
+      await addAccount("PLN", alertUser);
+      const accId = `${alertUser}-acc-moved`;
+      await db.insert(schema.accounts).values({
+        id: accId,
+        user_id: alertUser,
+        name: "Moved",
+        currency: accountCurrency,
+      });
+      await addTx({
+        accountId: accId,
+        categoryId: cat,
+        amountMinor: -15000,
+        date: "2026-11-03",
+        owner: alertUser,
+      });
+      const created = await createBudget(
+        alertUser,
+        { categoryId: cat, currency: "PLN", limit: "100.00" },
+        db,
+      );
+      if (!("id" in created)) throw new Error("budget not created");
+      return accId;
+    }
+
+    it("emails once when a currency change moves spending over a budget", async () => {
+      const accId = await overBudgetInPln("USD");
+      await check();
+      expect(sent).toHaveLength(0);
+
+      await update(accId, "PLN");
+      await update(accId, "PLN");
+      expect(sent).toHaveLength(1);
+    });
+
+    it("sends nothing when the currency is unchanged", async () => {
+      const accId = await overBudgetInPln("USD");
+      await update(accId, "USD");
+      expect(sent).toHaveLength(0);
+    });
+
+    it("treats a null currency as PLN, so null to PLN sends nothing", async () => {
+      const accId = await overBudgetInPln(null);
+      await update(accId, "PLN");
+      expect(sent).toHaveLength(0);
+    });
+
+    it("ignores another user's account", async () => {
+      const accId = await overBudgetInPln("USD");
+      await update(accId, "PLN", "someone-else");
+      expect(sent).toHaveLength(0);
+      const [row] = await db
+        .select({ currency: schema.accounts.currency })
+        .from(schema.accounts)
+        .where(eq(schema.accounts.id, accId));
+      expect(row?.currency).toBe("USD");
+    });
   });
 });
 

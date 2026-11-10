@@ -32,7 +32,10 @@ export interface BudgetsOverview {
   budgets: BudgetProgress[];
   /** Distinct currencies of the user's accounts. */
   currencies: string[];
-  /** Currency of the account with the most transactions; PLN on a tie/none. */
+  /**
+   * Currency of the account with the most transactions. On a tie or with no
+   * transactions: PLN if the user has it, else their first sorted currency.
+   */
   defaultCurrency: string;
   /** How many budgets the plan permits; null = unlimited (paid plans). */
   budgetAllowance: number | null;
@@ -340,6 +343,11 @@ export interface BudgetAlertCheckInput {
   send?: (message: EmailMessage) => Promise<void>;
 }
 
+/** Injectable collaborators of the alert check; all default to the real ones. */
+export type BudgetAlertDeps = Partial<
+  Pick<BudgetAlertCheckInput, "db" | "now" | "send">
+>;
+
 export interface BudgetAlertCheckResult {
   /** Alert emails sent by this check. */
   sent: number;
@@ -433,9 +441,15 @@ export async function runBudgetAlertCheck({
 export async function runBudgetAlertCheckSafely(
   userId: string,
   db: Db = defaultDb,
+  { now, send }: Omit<BudgetAlertDeps, "db"> = {},
 ): Promise<void> {
   try {
-    const { sent, failed } = await runBudgetAlertCheck({ userId, db });
+    const { sent, failed } = await runBudgetAlertCheck({
+      userId,
+      db,
+      now,
+      send,
+    });
     if (failed > 0) {
       getLogger().warn({ userId, sent, failed }, "budget alert sends failed");
     }
@@ -497,13 +511,15 @@ export async function runBudgetAlertCheckForAllUsers({
 }
 
 /**
- * The one call every transaction write path makes once its write succeeded.
- * Bulk paths pass whether anything changed so an empty request does no work.
+ * The one call every write that can change budget spending makes once it
+ * succeeded: transaction writes and an account's currency change. Bulk paths
+ * pass whether anything changed so an empty request does no work.
  * Never throws (see `runBudgetAlertCheckSafely`).
  */
 export async function checkBudgetsAfterWrite(
   userId: string,
   changed = true,
+  { db, now, send }: BudgetAlertDeps = {},
 ): Promise<void> {
-  if (changed) await runBudgetAlertCheckSafely(userId);
+  if (changed) await runBudgetAlertCheckSafely(userId, db, { now, send });
 }
