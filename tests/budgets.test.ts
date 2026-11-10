@@ -775,21 +775,36 @@ describe("budget alerts", () => {
     expect(sent).toHaveLength(0);
   });
 
-  it("removeBudget and removeBudgetsForCategories drop the alert records", async () => {
+  it("alerts again for a budget recreated after removeBudget in the same month", async () => {
     const a = await setup("10.00", 5000, "Alert A");
-    const b = await setup("10.00", 5000, "Alert B");
     await check();
-    expect(sent).toHaveLength(2);
+    expect(sent).toHaveLength(1);
 
     expect(await removeBudget(alertUser, a.budgetId, db)).toEqual({
       id: a.budgetId,
     });
+    await createBudget(
+      alertUser,
+      { categoryId: a.cat, currency: "PLN", limit: "10.00" },
+      db,
+    );
+    await check();
+    expect(sent).toHaveLength(2);
+  });
+
+  it("alerts again for a budget recreated after removeBudgetsForCategories", async () => {
+    const b = await setup("10.00", 5000, "Alert B");
+    await check();
+    expect(sent).toHaveLength(1);
+
     await removeBudgetsForCategories(alertUser, [b.cat], db);
-    const left = await db
-      .select()
-      .from(schema.budget_alerts)
-      .where(eq(schema.budget_alerts.user_id, alertUser));
-    expect(left).toHaveLength(0);
+    await createBudget(
+      alertUser,
+      { categoryId: b.cat, currency: "PLN", limit: "10.00" },
+      db,
+    );
+    await check();
+    expect(sent).toHaveLength(2);
   });
 });
 
