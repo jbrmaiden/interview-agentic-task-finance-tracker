@@ -219,15 +219,21 @@ test.describe("Categorization rule management", () => {
     // BIEDRONKA was categorized as Groceries via the seeded rule. Now delete
     // every rule that contains "Biedronka" or "BIEDRONKA".
     await page.goto("/categorization");
-    while (true) {
-      const targets = page
-        .getByTestId("rule-row")
-        .filter({ has: page.locator('[data-field="pattern"]', { hasText: /^(BIEDRONKA|Biedronka)$/ }) });
-      const count = await targets.count();
-      if (count === 0) break;
+    const targets = page
+      .getByTestId("rule-row")
+      .filter({ has: page.locator('[data-field="pattern"]', { hasText: /^(BIEDRONKA|Biedronka)$/ }) });
+    // The seeded rule must be on screen before counting, or the loop below
+    // could see an unloaded list and delete nothing.
+    await expect(targets.first()).toBeVisible();
+    let remaining = await targets.count();
+    while (remaining > 0) {
       await targets.first().getByTestId("delete-rule").click();
       await page.getByTestId("delete-rule-confirm").click();
       await expect(page.getByTestId("delete-rule-dialog")).toBeHidden();
+      // Wait for the refetched list to drop the deleted row before the next
+      // click — clicking during the re-render hits a detached button.
+      remaining -= 1;
+      await expect(targets).toHaveCount(remaining);
     }
 
     // The previously-imported BIEDRONKA row keeps its Groceries category.
