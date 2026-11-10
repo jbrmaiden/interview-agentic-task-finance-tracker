@@ -431,5 +431,11 @@
   "budget_left": "{amount} left",
   "budget_over_by": "Over by {amount}",
   "budget_over_label": "Over budget",
-  "budget_progress_label": "{category} budget progress"
+  "budget_progress_label": "{category} budget progress",
+  "edit_budget": "Edit Budget",
+  "save_budget_btn": "Save Budget",
+  "budget_not_found": "That budget no longer exists.",
+  "remove_budget_title": "Remove budget?",
+  "remove_budget_confirm": "Remove the {category} budget ({currency})? Your transactions and categories are not affected.",
+  "remove_budget_btn": "Remove"
 }

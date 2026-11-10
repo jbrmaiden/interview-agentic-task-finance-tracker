@@ -4,7 +4,13 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/db/index.ts";
-import { createBudget, listBudgets } from "../src/server/budgets.server.ts";
+import {
+  changeBudgetLimit,
+  createBudget,
+  listBudgets,
+  removeBudget,
+  removeBudgetsForCategories,
+} from "../src/server/budgets.server.ts";
 
 const userId = "budgets-test-user";
 const otherUserId = "budgets-test-other";
@@ -266,5 +272,166 @@ describe("budgets module", () => {
     // Tie falls back to PLN.
     await addTx({ accountId: pln, categoryId: food, amountMinor: -1, date: "2026-11-02" });
     expect((await listBudgets(userId, NOW, db)).defaultCurrency).toBe("PLN");
+  });
+});
+
+describe("budgets module: change, remove, category changes", () => {
+  beforeEach(async () => {
+    for (const id of [userId, otherUserId]) {
+      await db
+        .insert(schema.users)
+        .values({ id, username: id, password_hash: "x" });
+    }
+  });
+
+  afterEach(async () => {
+    for (const id of [userId, otherUserId]) {
+      await db.delete(schema.budgets).where(eq(schema.budgets.user_id, id));
+      await db
+        .delete(schema.transactions)
+        .where(eq(schema.transactions.user_id, id));
+      await db.delete(schema.accounts).where(eq(schema.accounts.user_id, id));
+      await db
+        .delete(schema.categories)
+        .where(eq(schema.categories.user_id, id));
+      await db.delete(schema.users).where(eq(schema.users.id, id));
+    }
+  });
+
+  const create = async (
+    categoryId: string,
+    limit = "100",
+    owner = userId,
+  ): Promise<string> => {
+    const r = await createBudget(
+      owner,
+      { categoryId, currency: "PLN", limit },
+      db,
+    );
+    if (!("id" in r)) throw new Error(`create failed: ${r.code}`);
+    return r.id;
+  };
+  const list = async (owner = userId) =>
+    (await listBudgets(owner, NOW, db)).budgets;
+
+  it("changes only the limit, keeping category, currency and spending", async () => {
+    const food = await addCategory("Food");
+    const acc = await addAccount("PLN");
+    await addTx({ accountId: acc, categoryId: food, amountMinor: -2500, date: "2026-11-02" });
+    const id = await create(food, "100");
+
+    expect(await changeBudgetLimit(userId, id, "250,50", db)).toEqual({ id });
+
+    const [b] = await list();
+    expect(b).toMatchObject({
+      id,
+      categoryId: food,
+      currency: "PLN",
+      limitMinor: 25050,
+      spentMinor: 2500,
+      remainingMinor: 22550,
+    });
+  });
+
+  it("rejects an empty, zero, negative or non-numeric new limit", async () => {
+    const food = await addCategory("Food");
+    await addAccount("PLN");
+    const id = await create(food, "100");
+    for (const bad of ["", "0", "-5", "abc"]) {
+      expect(await changeBudgetLimit(userId, id, bad, db)).toMatchObject({
+        code: "invalid_limit",
+      });
+    }
+    expect((await list())[0]!.limitMinor).toBe(10000);
+  });
+
+  it("treats a foreign or missing budget as budget_not_found when changing", async () => {
+    const otherCat = await addCategory("Food", null, otherUserId);
+    await addAccount("PLN", otherUserId);
+    const foreign = await create(otherCat, "100", otherUserId);
+
+    expect(await changeBudgetLimit(userId, foreign, "5", db)).toMatchObject({
+      code: "budget_not_found",
+    });
+    expect(await changeBudgetLimit(userId, "nope", "5", db)).toMatchObject({
+      code: "budget_not_found",
+    });
+    expect((await list(otherUserId))[0]!.limitMinor).toBe(10000);
+  });
+
+  it("removes a budget but leaves transactions and categories untouched", async () => {
+    const food = await addCategory("Food");
+    const acc = await addAccount("PLN");
+    await addTx({ accountId: acc, categoryId: food, amountMinor: -100, date: "2026-11-02" });
+    const id = await create(food);
+
+    expect(await removeBudget(userId, id, db)).toEqual({ id });
+
+    expect(await list()).toEqual([]);
+    expect(
+      await db.select().from(schema.transactions).where(eq(schema.transactions.user_id, userId)),
+    ).toHaveLength(1);
+    expect(
+      await db.select().from(schema.categories).where(eq(schema.categories.user_id, userId)),
+    ).toHaveLength(1);
+  });
+
+  it("treats a foreign or missing budget as budget_not_found when removing", async () => {
+    const otherCat = await addCategory("Food", null, otherUserId);
+    await addAccount("PLN", otherUserId);
+    const foreign = await create(otherCat, "100", otherUserId);
+
+    expect(await removeBudget(userId, foreign, db)).toMatchObject({
+      code: "budget_not_found",
+    });
+    expect(await removeBudget(userId, "nope", db)).toMatchObject({
+      code: "budget_not_found",
+    });
+    expect(await list(otherUserId)).toHaveLength(1);
+  });
+
+  it("removes budgets for a set of categories, only for the owner", async () => {
+    const food = await addCategory("Food");
+    const dining = await addCategory("Dining", food);
+    const fun = await addCategory("Fun");
+    const otherCat = await addCategory("Food", null, otherUserId);
+    await addAccount("PLN");
+    await addAccount("PLN", otherUserId);
+    await create(food);
+    await create(dining);
+    await create(fun);
+    await create(otherCat, "100", otherUserId);
+
+    await removeBudgetsForCategories(userId, [food, dining, otherCat], db);
+
+    expect((await list()).map((b) => b.categoryId)).toEqual([fun]);
+    expect(await list(otherUserId)).toHaveLength(1);
+  });
+
+  it("re-parenting a category re-scopes a parent budget's spending", async () => {
+    const food = await addCategory("Food");
+    const fun = await addCategory("Fun");
+    const cinema = await addCategory("Cinema", fun);
+    const acc = await addAccount("PLN");
+    await addTx({ accountId: acc, categoryId: food, amountMinor: -100, date: "2026-11-02" });
+    await addTx({ accountId: acc, categoryId: cinema, amountMinor: -400, date: "2026-11-02" });
+    await create(food);
+    const spent = async () =>
+      (await list()).find((b) => b.categoryId === food)!.spentMinor;
+    expect(await spent()).toBe(100);
+
+    // Move Cinema under Food: the parent budget gains its spending.
+    await db
+      .update(schema.categories)
+      .set({ parent_id: food })
+      .where(eq(schema.categories.id, cinema));
+    expect(await spent()).toBe(500);
+
+    // Move it back out: the parent budget loses it again.
+    await db
+      .update(schema.categories)
+      .set({ parent_id: fun })
+      .where(eq(schema.categories.id, cinema));
+    expect(await spent()).toBe(100);
   });
 });

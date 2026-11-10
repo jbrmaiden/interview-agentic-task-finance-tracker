@@ -6,7 +6,7 @@ Spec: `.scratch/budgets/spec.md` (user stories 34–40).
 
 **Blocked by:** 01 (Budgets page — add a budget and see its progress)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 - [ ] Budgets module and server functions gain "change limit" and "remove budget", both ownership-checked in the same query; a foreign or missing budget returns `budget_not_found`.
 - [ ] The edit dialog shows the budget's category and currency read-only and validates the new limit like creation does.

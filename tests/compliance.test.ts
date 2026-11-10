@@ -35,6 +35,13 @@ async function seedFullUser(userId: string) {
     user_id: userId,
     name: "Groceries",
   });
+  await db.insert(schema.budgets).values({
+    id: `${userId}-budget`,
+    user_id: userId,
+    category_id: `${userId}-cat`,
+    currency: "PLN",
+    limit_minor: 50000,
+  });
   await db.insert(schema.import_batches).values({
     id: `${userId}-batch`,
     user_id: userId,
@@ -160,6 +167,7 @@ describe("compliance: account hard delete", () => {
       db.select().from(schema.receipt_items).where(eq(schema.receipt_items.receipt_id, `${userId}-rcpt`)),
       db.select().from(schema.ai_usage).where(eq(schema.ai_usage.user_id, userId)),
       db.select().from(schema.subscriptions).where(eq(schema.subscriptions.user_id, userId)),
+      db.select().from(schema.budgets).where(eq(schema.budgets.user_id, userId)),
     ]);
     for (const rows of remaining) {
       expect.soft(rows).toHaveLength(0);

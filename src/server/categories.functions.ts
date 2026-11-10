@@ -3,6 +3,7 @@ import { eq, and, asc, count, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db, schema } from "#/db";
 import { requireUserId } from "#/server/session";
+import { removeBudgetsForCategories } from "#/server/budgets.server";
 
 
 const colorRegex = /^#[0-9A-Fa-f]{6}$/;
@@ -304,6 +305,9 @@ export const deleteCategory = createServerFn({ method: "POST" })
     await db
       .delete(schema.categorization_rules)
       .where(inArray(schema.categorization_rules.category_id, allIdsToDelete));
+
+    // Budgets reference categories and the schema has no cascades
+    await removeBudgetsForCategories(userId, allIdsToDelete);
 
     // Delete all descendant categories first, then the target
     await db

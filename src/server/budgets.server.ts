@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
 import { parseAmountToMinor } from "#/lib/money";
 
@@ -215,3 +215,71 @@ export async function createBudget(
   return { id };
 }
 
+
+export type ChangeBudgetLimitResult =
+  | { id: string }
+  | { error: string; code: "invalid_limit" | "budget_not_found" };
+
+/** Change only the limit; category and currency are fixed after creation. */
+export async function changeBudgetLimit(
+  userId: string,
+  budgetId: string,
+  limit: string,
+  db: Db = defaultDb,
+): Promise<ChangeBudgetLimitResult> {
+  const limitMinor = parseAmountToMinor(limit);
+  if (limitMinor === null || limitMinor <= 0) {
+    return { error: "Limit must be a positive amount", code: "invalid_limit" };
+  }
+  // Ownership in the same query: foreign budget == missing budget.
+  const updated = await db
+    .update(schema.budgets)
+    .set({ limit_minor: limitMinor, updated_at: new Date() })
+    .where(
+      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
+    )
+    .returning({ id: schema.budgets.id });
+  if (updated.length === 0) {
+    return { error: "Budget not found", code: "budget_not_found" };
+  }
+  return { id: budgetId };
+}
+
+export type RemoveBudgetResult =
+  | { id: string }
+  | { error: string; code: "budget_not_found" };
+
+/** Remove a budget. Transactions and categories are never touched. */
+export async function removeBudget(
+  userId: string,
+  budgetId: string,
+  db: Db = defaultDb,
+): Promise<RemoveBudgetResult> {
+  const deleted = await db
+    .delete(schema.budgets)
+    .where(
+      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
+    )
+    .returning({ id: schema.budgets.id });
+  if (deleted.length === 0) {
+    return { error: "Budget not found", code: "budget_not_found" };
+  }
+  return { id: budgetId };
+}
+
+/** Remove every budget on the given categories (used by category deletion). */
+export async function removeBudgetsForCategories(
+  userId: string,
+  categoryIds: string[],
+  db: Db = defaultDb,
+): Promise<void> {
+  if (categoryIds.length === 0) return;
+  await db
+    .delete(schema.budgets)
+    .where(
+      and(
+        eq(schema.budgets.user_id, userId),
+        inArray(schema.budgets.category_id, categoryIds),
+      ),
+    );
+}
