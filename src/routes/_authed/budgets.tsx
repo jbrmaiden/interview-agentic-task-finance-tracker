@@ -37,6 +37,8 @@ import { formatMinor, formatMoney, parseAmountToMinor } from "#/lib/money";
 
 const BUDGETS_QUERY_KEY = ["budgets"] as const;
 const CATEGORIES_QUERY_KEY = ["categories"] as const;
+// Shared with the billing page, whose usage line counts budgets.
+const BILLING_QUERY_KEY = ["billing"] as const;
 
 type CategoryRow = Awaited<ReturnType<typeof getCategories>>[number];
 type BudgetRow = Awaited<ReturnType<typeof getBudgets>>["budgets"][number];
@@ -514,6 +516,7 @@ function BudgetsPage() {
     }) => createBudgetServerFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BUDGETS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: BILLING_QUERY_KEY });
     },
   });
 
@@ -528,6 +531,7 @@ function BudgetsPage() {
     mutationFn: (id: string) => removeBudgetServerFn({ data: { id } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: BUDGETS_QUERY_KEY });
+      queryClient.invalidateQueries({ queryKey: BILLING_QUERY_KEY });
     },
   });
 
@@ -543,6 +547,9 @@ function BudgetsPage() {
   const budgets = data?.budgets ?? [];
   const currencies = data?.currencies ?? [];
   const hasAccounts = currencies.length > 0;
+  const allowance = data?.budgetAllowance ?? null;
+  const allowanceUsedUp =
+    allowance !== null && (data?.budgetsUsed ?? 0) >= allowance;
 
   // Nest a budget under its parent's budget when both share a currency.
   const ordered = useMemo(() => {
@@ -625,14 +632,28 @@ function BudgetsPage() {
             )}
           </div>
           {hasAccounts && (
-            <Button
-              onClick={() => {
-                setFormError(null);
-                setIsFormOpen(true);
-              }}
-            >
-              {m.add_budget()}
-            </Button>
+            <div className="flex flex-col items-end gap-1">
+              <Button
+                disabled={allowanceUsedUp}
+                onClick={() => {
+                  setFormError(null);
+                  setIsFormOpen(true);
+                }}
+              >
+                {m.add_budget()}
+              </Button>
+              {allowanceUsedUp && (
+                <p
+                  className="text-xs text-muted-foreground"
+                  data-testid="budget-allowance-hint"
+                >
+                  {m.budget_allowance_reached({ limit: allowance })}
+                  <Link to="/billing" className="ml-1 underline font-medium">
+                    {m.budget_upgrade_link()}
+                  </Link>
+                </p>
+              )}
+            </div>
           )}
         </div>
       </header>

@@ -10,7 +10,7 @@ _Avoid_: Limit (that's one attribute of a budget), envelope, goal
 
 **Limit**:
 The amount a budget allows to be spent in one month.
-_Avoid_: Cap, allowance, target
+_Avoid_: Cap, target
 
 **Spending**:
 The total of expense transactions (money going out) in a budget's category tree, in the budget's currency. Income and refunds never reduce it.
@@ -27,3 +27,7 @@ _Avoid_: Exceeded, overspent, breached
 **Budget alert**:
 The email a user receives when a budget is found over budget, however it got there (new spending, or a limit set below what was already spent). A budget sends at most one per budget month, and only to a verified email address.
 _Avoid_: Notification, warning, over-budget email
+
+**Budget allowance**:
+How many budgets a plan permits (3 on the free plan, unlimited on Pro). Distinct from a budget's limit, which is an amount of money.
+_Avoid_: Cap, quota, limit

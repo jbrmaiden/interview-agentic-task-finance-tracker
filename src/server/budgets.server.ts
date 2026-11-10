@@ -2,7 +2,7 @@ import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
 import { formatMoney, parseAmountToMinor } from "#/lib/money";
 import { m } from "#/paraglide/messages";
-import { checkBudgetLimit } from "#/server/billing.server";
+import { checkBudgetLimit, getEntitlements } from "#/server/billing.server";
 import { sendEmail, type EmailMessage } from "#/server/email";
 import { env } from "#/server/env";
 import { errorName, getLogger } from "#/server/logger";
@@ -35,6 +35,10 @@ export interface BudgetsOverview {
   currencies: string[];
   /** Currency of the account with the most transactions; PLN on a tie/none. */
   defaultCurrency: string;
+  /** How many budgets the plan permits; null = unlimited (paid plans). */
+  budgetAllowance: number | null;
+  /** How many budgets the user has. */
+  budgetsUsed: number;
 }
 
 /** "YYYY-MM-01" of the budget month containing `now` (UTC). */
@@ -146,10 +150,13 @@ export async function listBudgets(
     };
   });
 
+  const { maxBudgets } = await getEntitlements(userId, db);
   return {
     month: from.slice(0, 7),
     budgets,
     ...(await loadCurrencies(userId, db)),
+    budgetAllowance: maxBudgets,
+    budgetsUsed: budgets.length,
   };
 }
 

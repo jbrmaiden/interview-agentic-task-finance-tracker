@@ -311,7 +311,7 @@ test.describe("Budgets free-plan allowance", () => {
     return names;
   }
 
-  test("free users are blocked on the 4th budget with an upgrade link", async ({
+  test("free users cannot add a 4th budget and get an upgrade link", async ({
     page,
     signedInUser,
   }) => {
@@ -322,14 +322,61 @@ test.describe("Budgets free-plan allowance", () => {
       await expect(row(page, name)).toBeVisible();
     }
 
-    const dialog = await addBudget(page, names[3], "100");
+    // The allowance is used up, so the form can't even be opened; the server
+    // block is covered by the budgets unit tests.
+    await page.goto("/budgets");
     await expect(
-      dialog.getByText(/free plan is limited to 3 budgets/i),
-    ).toBeVisible();
-    await dialog.getByRole("link", { name: "Upgrade to Pro" }).click();
+      page.getByRole("banner").getByRole("button", { name: "Add Budget" }),
+    ).toBeDisabled();
+    await page
+      .getByTestId("budget-allowance-hint")
+      .getByRole("link", { name: "Upgrade to Pro" })
+      .click();
     await expect(page).toHaveURL("/billing");
     await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
       "3 of 3 budgets",
+    );
+  });
+
+  test("free users at the allowance see Add Budget disabled and the upgrade hint up front", async ({
+    page,
+    signedInUser,
+  }) => {
+    const names = await setup(page, signedInUser.username, 3);
+    for (const name of names.slice(0, 2)) {
+      await expect(await addBudget(page, name, "100")).toBeHidden();
+    }
+    const addButton = page
+      .getByRole("banner")
+      .getByRole("button", { name: "Add Budget" });
+    const hint = page.getByTestId("budget-allowance-hint");
+
+    // Below the allowance: enabled, no hint.
+    await expect(addButton).toBeEnabled();
+    await expect(hint).toBeHidden();
+
+    // At the allowance: disabled with the upgrade link, no submit needed.
+    await expect(await addBudget(page, names[2], "100")).toBeHidden();
+    await expect(addButton).toBeDisabled();
+    await expect(hint).toBeVisible();
+    await expect(
+      hint.getByRole("link", { name: "Upgrade to Pro" }),
+    ).toHaveAttribute("href", "/billing");
+
+    // Removing one frees an allowance slot.
+    await row(page, names[0]).getByTestId("remove-budget").click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Remove", exact: true })
+      .click();
+    await expect(row(page, names[0])).toHaveCount(0);
+    await expect(addButton).toBeEnabled();
+    await expect(hint).toBeHidden();
+
+    // The billing usage line reflects the removal without a reload.
+    await page.getByRole("link", { name: "Billing" }).first().click();
+    await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
+      "2 of 3 budgets",
     );
   });
 
@@ -365,10 +412,10 @@ test.describe("Budgets free-plan allowance", () => {
     for (const name of names.slice(0, 4)) {
       await expect(row(page, name)).toBeVisible();
     }
-    const dialog = await addBudget(page, names[4], "100");
     await expect(
-      dialog.getByText(/free plan is limited to 3 budgets/i),
-    ).toBeVisible();
+      page.getByRole("banner").getByRole("button", { name: "Add Budget" }),
+    ).toBeDisabled();
+    await expect(page.getByTestId("budget-allowance-hint")).toBeVisible();
     await page.goto("/billing");
     await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
       "4 of 3 budgets",

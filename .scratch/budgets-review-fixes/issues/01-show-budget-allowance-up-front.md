@@ -8,12 +8,12 @@ Decision (agreed in conversation): the plan's quota is called **Budget allowance
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Listing a user's budgets returns the budget allowance (a number, or unlimited for paid plans) and the current usage, alongside the existing month, budgets and currencies.
-- [ ] Free plan at the allowance: "Add Budget" is disabled and the upgrade hint shows without a submit. Below the allowance, and on paid plans, the button is enabled. The server-side block on creation stays as the source of truth.
-- [ ] Creating or removing a budget refreshes the cached billing usage as well as the budgets list.
-- [ ] `GLOSSARY.md` gains **Budget allowance** (how many budgets a plan permits; _Avoid_: cap, quota, limit), and existing wording in the spec and tests is consistent with it.
-- [ ] Unit test at the budgets server module seam: the overview reports allowance and usage for free and paid users.
-- [ ] E2E: a free user with 3 budgets sees "Add Budget" disabled and the upgrade hint. Removing one re-enables it.
-- [ ] Existing budgets and billing unit and E2E tests still pass.
+- [x] Listing a user's budgets returns the budget allowance (a number, or unlimited for paid plans) and the current usage, alongside the existing month, budgets and currencies.
+- [x] Free plan at the allowance: "Add Budget" is disabled and the upgrade hint shows without a submit. Below the allowance, and on paid plans, the button is enabled. The server-side block on creation stays as the source of truth.
+- [x] Creating or removing a budget refreshes the cached billing usage as well as the budgets list.
+- [x] `GLOSSARY.md` gains **Budget allowance** (how many budgets a plan permits; _Avoid_: cap, quota, limit), and existing wording in the spec and tests is consistent with it.
+- [x] Unit test at the budgets server module seam: the overview reports allowance and usage for free and paid users.
+- [x] E2E: a free user with 3 budgets sees "Add Budget" disabled and the upgrade hint. Removing one re-enables it.
+- [x] Existing budgets and billing unit and E2E tests still pass.
