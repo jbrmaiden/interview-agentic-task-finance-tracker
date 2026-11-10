@@ -448,3 +448,63 @@ export async function runBudgetAlertCheckSafely(
     );
   }
 }
+
+export interface AllUsersAlertCheckResult extends BudgetAlertCheckResult {
+  /** Users with at least one budget that were checked. */
+  users: number;
+  /** Users whose check threw; the others were still checked. */
+  failedUsers: number;
+}
+
+/**
+ * Run the alert check for every user with at least one budget: the hourly
+ * backstop for alerts a write-triggered check missed or failed to send.
+ * One user's failure never stops the others.
+ */
+export async function runBudgetAlertCheckForAllUsers({
+  now = new Date(),
+  db = defaultDb,
+  send = sendEmail,
+}: Omit<BudgetAlertCheckInput, "userId"> = {}): Promise<AllUsersAlertCheckResult> {
+  const owners = await db
+    .selectDistinct({ userId: schema.budgets.user_id })
+    .from(schema.budgets);
+
+  const total: AllUsersAlertCheckResult = {
+    users: owners.length,
+    sent: 0,
+    failed: 0,
+    failedUsers: 0,
+  };
+  for (const { userId } of owners) {
+    try {
+      const { sent, failed } = await runBudgetAlertCheck({
+        userId,
+        now,
+        db,
+        send,
+      });
+      total.sent += sent;
+      total.failed += failed;
+    } catch (err) {
+      total.failedUsers++;
+      getLogger().error(
+        { userId, errorName: errorName(err) },
+        "budget alert check failed",
+      );
+    }
+  }
+  return total;
+}
+
+/**
+ * The one call every transaction write path makes once its write succeeded.
+ * Bulk paths pass whether anything changed so an empty request does no work.
+ * Never throws (see `runBudgetAlertCheckSafely`).
+ */
+export async function checkBudgetsAfterWrite(
+  userId: string,
+  changed = true,
+): Promise<void> {
+  if (changed) await runBudgetAlertCheckSafely(userId);
+}

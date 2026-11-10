@@ -12,6 +12,7 @@ import {
   removeBudget,
   removeBudgetsForCategories,
   runBudgetAlertCheckSafely,
+  runBudgetAlertCheckForAllUsers,
 } from "../src/server/budgets.server.ts";
 
 const userId = "budgets-test-user";
@@ -870,5 +871,75 @@ describe("runBudgetAlertCheckSafely logging", () => {
     expect(text).toContain("log-leak-user");
     expect(text).not.toContain("Failed query");
     expect(text).not.toContain("super-secret");
+  });
+});
+
+describe("budget alert check for all users", () => {
+  const users = ["all-users-a", "all-users-b", "all-users-none"];
+  const emailOf = (id: string) => `${id}@example.com`;
+
+  beforeEach(async () => {
+    for (const id of users) {
+      await db.insert(schema.users).values({
+        id,
+        username: id,
+        email: emailOf(id),
+        email_verified_at: new Date(),
+        password_hash: "x",
+      });
+    }
+  });
+
+  afterEach(async () => {
+    for (const id of users) {
+      await db
+        .delete(schema.budget_alerts)
+        .where(eq(schema.budget_alerts.user_id, id));
+      await db.delete(schema.budgets).where(eq(schema.budgets.user_id, id));
+      await db
+        .delete(schema.transactions)
+        .where(eq(schema.transactions.user_id, id));
+      await db.delete(schema.accounts).where(eq(schema.accounts.user_id, id));
+      await db
+        .delete(schema.categories)
+        .where(eq(schema.categories.user_id, id));
+      await db.delete(schema.users).where(eq(schema.users.id, id));
+    }
+  });
+
+  async function spend(owner: string, limit: string | null, spentMinor: number) {
+    const cat = await addCategory(`${owner} Food`, null, owner);
+    const acc = await addAccount("PLN", owner);
+    await addTx({
+      accountId: acc,
+      categoryId: cat,
+      amountMinor: -spentMinor,
+      date: "2026-11-03",
+      owner,
+    });
+    if (limit !== null) {
+      await createBudget(owner, { categoryId: cat, currency: "PLN", limit }, db);
+    }
+  }
+
+  it("alerts over-budget budgets of every user and skips users without budgets", async () => {
+    await spend("all-users-a", "10.00", 5000);
+    await spend("all-users-b", "10.00", 5000);
+    await spend("all-users-none", null, 5000);
+    const sent: Array<{ to: string; subject: string; text: string }> = [];
+
+    const result = await runBudgetAlertCheckForAllUsers({
+      now: NOW,
+      db,
+      send: async (msg) => {
+        sent.push(msg);
+      },
+    });
+
+    expect(result).toMatchObject({ sent: 2, failed: 0 });
+    expect(sent.map((s) => s.to).sort()).toEqual([
+      emailOf("all-users-a"),
+      emailOf("all-users-b"),
+    ]);
   });
 });
