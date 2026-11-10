@@ -9,6 +9,7 @@ import {
   doublePrecision,
   serial,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const auth_token_type = pgEnum("auth_token_type", [
@@ -275,6 +276,38 @@ export const stripe_events = pgTable("stripe_events", {
     .notNull()
     .defaultNow(),
 });
+
+// Monthly spending limit on one category in one currency (ADR 0001).
+// Spending is computed live from transactions; nothing about it is stored.
+export const budgets = pgTable(
+  "budgets",
+  {
+    id: text("id").primaryKey(),
+    user_id: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    category_id: text("category_id")
+      .notNull()
+      .references(() => categories.id),
+    currency: text("currency").notNull(),
+    // Integer minor units, always positive.
+    limit_minor: integer("limit_minor").notNull(),
+    created_at: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    updated_at: timestamp("updated_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("budgets_user_category_currency_uniq").on(
+      t.user_id,
+      t.category_id,
+      t.currency,
+    ),
+    index("budgets_user_idx").on(t.user_id),
+  ],
+);
 
 export const todos = pgTable("todos", {
   id: serial("id").primaryKey(),
