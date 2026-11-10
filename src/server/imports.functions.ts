@@ -1077,6 +1077,9 @@ async function* streamConfirmImport(
       row_count: insertRows.length,
     });
     await db.insert(schema.transactions).values(insertRows);
+    // Once per import, straight after the rows are written (never per row), so
+    // a client that disconnects during the rule updates below can't skip it.
+    await checkBudgetsAfterWrite(userId);
 
     if (aiRulesToCreate.length > 0) {
       const aiRulesInsert = aiRulesToCreate.map((rule) => ({
@@ -1109,9 +1112,6 @@ async function* streamConfirmImport(
         };
       }
     }
-
-    // Once per import, after every row is written (never per row).
-    await checkBudgetsAfterWrite(userId);
   }
 
   yield {
