@@ -41,8 +41,12 @@ export const getAccounts = createServerFn({ method: "GET" }).handler(
         bank: schema.accounts.bank,
         currency: schema.accounts.currency,
         created_at: schema.accounts.created_at,
+        // Qualify the outer column explicitly: Drizzle renders single-table
+        // select columns unqualified, so a bare "id" here would resolve to
+        // transactions.id inside the subquery and the count would always be 0.
         transactionCount: sql<number>`(
-          SELECT COUNT(*) FROM ${schema.transactions} WHERE ${schema.transactions.account_id} = ${schema.accounts.id}
+          SELECT COUNT(*) FROM ${schema.transactions}
+          WHERE ${schema.transactions}.${sql.identifier("account_id")} = ${schema.accounts}.${sql.identifier("id")}
         )`.mapWith(Number),
       })
       .from(schema.accounts)
