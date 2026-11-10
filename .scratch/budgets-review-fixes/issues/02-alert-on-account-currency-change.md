@@ -8,11 +8,11 @@ Decision (agreed in conversation): changing an account's currency **is** a budge
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Updating an account runs the user's alert check once after the write succeeds, and only when the currency actually changed. Errors are caught and never fail the account update, the same as every other trigger.
-- [ ] The spec's "Triggers" list names account currency changes.
-- [ ] Spending from an account with no currency recorded counts toward the user's PLN budgets.
-- [ ] Unit test at the budgets server module seam: spending from an account with no currency counts toward a PLN budget and can make it over budget.
-- [ ] Unit test (red first): moving an over-budget amount of spending into a budget's currency, then running the check, sends exactly one budget alert. Wiring of the account path is verified in review, as agreed for ticket 05.
-- [ ] Existing accounts, budgets and budget-alert unit and E2E tests still pass.
+- [x] Updating an account runs the user's alert check once after the write succeeds, and only when the currency actually changed. Errors are caught and never fail the account update, the same as every other trigger.
+- [x] The spec's "Triggers" list names account currency changes.
+- [x] Spending from an account with no currency recorded counts toward the user's PLN budgets.
+- [x] Unit test at the budgets server module seam: spending from an account with no currency counts toward a PLN budget and can make it over budget.
+- [x] Unit test (red first): moving an over-budget amount of spending into a budget's currency, then running the check, sends exactly one budget alert. Wiring of the account path is verified in review, as agreed for ticket 05.
+- [x] Existing accounts, budgets and budget-alert unit and E2E tests still pass.

@@ -873,6 +873,67 @@ describe("budget alerts", () => {
     await check();
     expect(sent).toHaveLength(2);
   });
+
+  it("counts spending from an account with no currency toward a PLN budget", async () => {
+    const cat = await addCategory("Legacy Food", null, alertUser);
+    const accId = `${alertUser}-acc-legacy`;
+    await db.insert(schema.accounts).values({
+      id: accId,
+      user_id: alertUser,
+      name: "Legacy",
+      currency: null,
+    });
+    await addTx({
+      accountId: accId,
+      categoryId: cat,
+      amountMinor: -15000,
+      date: "2026-11-03",
+      owner: alertUser,
+    });
+    const created = await createBudget(
+      alertUser,
+      { categoryId: cat, currency: "PLN", limit: "100.00" },
+      db,
+    );
+    if (!("id" in created)) throw new Error("budget not created");
+
+    const overview = await listBudgets(alertUser, NOW, db);
+    expect(overview.budgets[0]).toMatchObject({
+      spentMinor: 15000,
+      overBudget: true,
+    });
+    await check();
+    expect(sent).toHaveLength(1);
+  });
+
+  it("alerts once when an account's currency change moves spending into an over-budget currency", async () => {
+    const cat = await addCategory("Moved Food", null, alertUser);
+    await addAccount("PLN", alertUser);
+    const usd = await addAccount("USD", alertUser);
+    await addTx({
+      accountId: usd,
+      categoryId: cat,
+      amountMinor: -15000,
+      date: "2026-11-03",
+      owner: alertUser,
+    });
+    const created = await createBudget(
+      alertUser,
+      { categoryId: cat, currency: "PLN", limit: "100.00" },
+      db,
+    );
+    if (!("id" in created)) throw new Error("budget not created");
+    await check();
+    expect(sent).toHaveLength(0);
+
+    await db
+      .update(schema.accounts)
+      .set({ currency: "PLN" })
+      .where(eq(schema.accounts.id, usd));
+    await check();
+    await check();
+    expect(sent).toHaveLength(1);
+  });
 });
 
 describe("runBudgetAlertCheckSafely logging", () => {
