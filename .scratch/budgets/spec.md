@@ -8,7 +8,7 @@ Source: `TASK.md` (user story "Monthly category budgets"). Vocabulary: `GLOSSARY
 
 Users can see what they spent, per category and over time, but have no way to plan against it. There is nothing that says "I want to spend at most 1,000 PLN on Groceries this month", nothing that shows how much of that is left, and nothing that tells them when they have gone over. They can track spending but not control it.
 
-For the business, budgets are also a planned Pro upsell: a feature free users value enough to hit a limit on.
+For the business, budgets are also a planned Pro upsell: a feature free users value enough to use up the free budget allowance.
 
 ## Solution
 
@@ -16,7 +16,7 @@ A new **Budgets** page in the main navigation. On it a user adds a budget for a 
 
 When a budget is found over budget, the user receives one budget alert email for that budget that month, with the category, limit, spending, and overshoot, and a link back to the Budgets page.
 
-Free-plan users can hold up to 3 budgets; Pro users unlimited. Hitting the free limit shows an upgrade hint. Budgets are user data: they appear in the data export and are destroyed by account deletion like everything else.
+Free-plan users can hold up to 3 budgets; Pro users unlimited. Reaching the free budget allowance shows an upgrade hint up front. Budgets are user data: they appear in the data export and are destroyed by account deletion like everything else.
 
 ## User Stories
 
@@ -94,7 +94,7 @@ Free-plan users can hold up to 3 budgets; Pro users unlimited. Hitting the free 
 ### Plans
 
 54. As a free-plan user, I want to create up to 3 budgets, so that I can try the feature.
-55. As a free-plan user at 3 budgets, I want a clear message that the free plan is limited to 3 budgets, with a link to upgrade, so that I know how to get more.
+55. As a free-plan user at 3 budgets, I want "Add Budget" disabled and a clear message that the free plan is limited to 3 budgets, with a link to upgrade, so that I know how to get more.
 56. As a Pro user, I want unlimited budgets, so that I can plan every category.
 57. As a user who downgraded from Pro with more than 3 budgets, I want all my existing budgets to keep working and alerting, so that downgrading never destroys or locks my data; only adding new ones is blocked.
 58. As a user, I want the billing page's usage list to show how many budgets I'm using against my plan's allowance, so that I understand my plan.
