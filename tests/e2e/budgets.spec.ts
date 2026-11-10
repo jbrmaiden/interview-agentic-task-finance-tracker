@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { test, expect, type Page } from "./fixtures";
 
 // Transactions are dated today (UTC) so they fall in the current budget month.
@@ -371,5 +373,67 @@ test.describe("Budgets free-plan allowance", () => {
     await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
       "4 of 3 budgets",
     );
+  });
+});
+
+test.describe("Budgets without accounts", () => {
+  async function deleteMainAccount(page: Page) {
+    await page.goto("/accounts");
+    await page.getByTestId("delete-account").first().click();
+    await page
+      .getByRole("alertdialog")
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+    await expect(page.getByTestId("delete-account")).toHaveCount(0);
+  }
+
+  const msg = JSON.parse(
+    readFileSync(join(process.cwd(), "messages/en.json"), "utf8"),
+  ) as Record<string, string>;
+
+  test("with no accounts, budgets asks to add an account first and cannot add a budget", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await deleteMainAccount(page);
+    await page.goto("/budgets");
+
+    await expect(
+      page.getByRole("heading", { name: msg.budgets_need_account }),
+    ).toBeVisible();
+    await expect(page.getByText(msg.budgets_need_account_desc)).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: msg.budgets_go_to_accounts }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add Budget" })).toHaveCount(
+      0,
+    );
+  });
+
+  test("adding an account makes budgets available in that currency", async ({
+    page,
+    signedInUser: _u,
+  }) => {
+    await deleteMainAccount(page);
+    await page.goto("/budgets");
+    await page
+      .getByRole("link", { name: msg.budgets_go_to_accounts })
+      .click();
+    await expect(page).toHaveURL("/accounts");
+
+    await page.getByRole("button", { name: "Add Account" }).click();
+    await page.getByLabel("Account Name").fill("Dollar Wallet");
+    await page.getByLabel("Currency").fill("USD");
+    await page.getByRole("button", { name: "Create Account" }).click();
+    await expect(page.getByText("Dollar Wallet")).toBeVisible();
+
+    await page.goto("/budgets");
+    await expect(
+      page.getByRole("heading", { name: msg.budgets_need_account }),
+    ).toBeHidden();
+    await page.getByRole("button", { name: "Add Budget" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add Budget" });
+    await expect(dialog.getByLabel("Currency")).toHaveValue("USD");
+    await expect(dialog.getByLabel("Currency").locator("option")).toHaveCount(1);
   });
 });
