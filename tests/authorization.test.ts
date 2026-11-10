@@ -19,6 +19,7 @@ const ids: Record<OwnedEntity, string> = {
   rule: "authz-rule-a",
   receipt: "authz-rcpt-a",
   importBatch: "authz-batch-a",
+  budget: "authz-budget-a",
 };
 
 beforeAll(async () => {
@@ -38,6 +39,13 @@ beforeAll(async () => {
     id: ids.category,
     user_id: userA,
     name: "A's category",
+  });
+  await db.insert(schema.budgets).values({
+    id: ids.budget,
+    user_id: userA,
+    category_id: ids.category,
+    currency: "PLN",
+    limit_minor: 50000,
   });
   await db.insert(schema.import_batches).values({
     id: ids.importBatch,
