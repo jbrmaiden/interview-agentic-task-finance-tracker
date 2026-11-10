@@ -216,3 +216,75 @@ test.describe("Budgets", () => {
     await expect(dialog.getByLabel("Currency").locator("option")).toHaveCount(1);
   });
 });
+
+test.describe("Budgets free-plan allowance", () => {
+  async function setup(page: Page, suffix: string, n: number) {
+    const names = Array.from({ length: n }, (_, i) => `Cap${i}-${suffix}`);
+    for (const name of names) await createCategory(page, name);
+    return names;
+  }
+
+  test("free users are blocked on the 4th budget with an upgrade link", async ({
+    page,
+    signedInUser,
+  }) => {
+    const names = await setup(page, signedInUser.username, 4);
+    for (const name of names.slice(0, 3)) {
+      const dialog = await addBudget(page, name, "100");
+      await expect(dialog).toBeHidden();
+      await expect(row(page, name)).toBeVisible();
+    }
+
+    const dialog = await addBudget(page, names[3], "100");
+    await expect(
+      dialog.getByText(/free plan is limited to 3 budgets/i),
+    ).toBeVisible();
+    await dialog.getByRole("link", { name: "Upgrade to Pro" }).click();
+    await expect(page).toHaveURL("/billing");
+    await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
+      "3 of 3 budgets",
+    );
+  });
+
+  test("pro users can create more than 3 budgets", async ({
+    page,
+    signedInUser,
+  }) => {
+    await page.request.post("/test-set-plan?plan=pro");
+    const names = await setup(page, signedInUser.username, 4);
+    for (const name of names) {
+      const dialog = await addBudget(page, name, "100");
+      await expect(dialog).toBeHidden();
+      await expect(row(page, name)).toBeVisible();
+    }
+    await page.goto("/billing");
+    await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
+      "4 budgets (unlimited)",
+    );
+  });
+
+  test("downgraded users keep every budget but cannot add more", async ({
+    page,
+    signedInUser,
+  }) => {
+    await page.request.post("/test-set-plan?plan=pro");
+    const names = await setup(page, signedInUser.username, 5);
+    for (const name of names.slice(0, 4)) {
+      const dialog = await addBudget(page, name, "100");
+      await expect(dialog).toBeHidden();
+    }
+    await page.request.post("/test-set-plan?plan=free&status=canceled");
+    await page.goto("/budgets");
+    for (const name of names.slice(0, 4)) {
+      await expect(row(page, name)).toBeVisible();
+    }
+    const dialog = await addBudget(page, names[4], "100");
+    await expect(
+      dialog.getByText(/free plan is limited to 3 budgets/i),
+    ).toBeVisible();
+    await page.goto("/billing");
+    await expect(page.getByTestId("billing-budgets-usage")).toHaveText(
+      "4 of 3 budgets",
+    );
+  });
+});

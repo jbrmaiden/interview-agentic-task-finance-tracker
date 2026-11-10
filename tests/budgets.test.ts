@@ -268,3 +268,76 @@ describe("budgets module", () => {
     expect((await listBudgets(userId, NOW, db)).defaultCurrency).toBe("PLN");
   });
 });
+
+describe("budget allowance", () => {
+  const limitUser = "budgets-limit-user";
+
+  const setPlan = (plan: "free" | "pro") =>
+    db.insert(schema.subscriptions).values({
+      user_id: limitUser,
+      plan,
+      status: "active",
+    });
+
+  beforeEach(async () => {
+    await db
+      .insert(schema.users)
+      .values({ id: limitUser, username: limitUser, password_hash: "x" });
+  });
+
+  afterEach(async () => {
+    await db
+      .delete(schema.subscriptions)
+      .where(eq(schema.subscriptions.user_id, limitUser));
+    await db.delete(schema.budgets).where(eq(schema.budgets.user_id, limitUser));
+    await db
+      .delete(schema.accounts)
+      .where(eq(schema.accounts.user_id, limitUser));
+    await db
+      .delete(schema.categories)
+      .where(eq(schema.categories.user_id, limitUser));
+    await db.delete(schema.users).where(eq(schema.users.id, limitUser));
+  });
+
+  async function addMany(n: number) {
+    await addAccount("PLN", limitUser);
+    const ids: string[] = [];
+    for (let i = 0; i < n; i++) {
+      ids.push(await addCategory(`Cat ${i}`, null, limitUser));
+    }
+    return ids;
+  }
+
+  it("blocks the budget past the free allowance and keeps existing ones", async () => {
+    const cats = await addMany(4);
+    for (const c of cats.slice(0, 3)) {
+      const r = await createBudget(
+        limitUser,
+        { categoryId: c, currency: "PLN", limit: "10" },
+        db,
+      );
+      expect("id" in r).toBe(true);
+    }
+    const blocked = await createBudget(
+      limitUser,
+      { categoryId: cats[3], currency: "PLN", limit: "10" },
+      db,
+    );
+    expect(blocked).toMatchObject({ code: "budget_limit_reached", limit: 3 });
+    expect((await listBudgets(limitUser, NOW, db)).budgets).toHaveLength(3);
+  });
+
+  it("lets a pro user create beyond the free allowance", async () => {
+    await setPlan("pro");
+    const cats = await addMany(4);
+    for (const c of cats) {
+      const r = await createBudget(
+        limitUser,
+        { categoryId: c, currency: "PLN", limit: "10" },
+        db,
+      );
+      expect("id" in r).toBe(true);
+    }
+    expect((await listBudgets(limitUser, NOW, db)).budgets).toHaveLength(4);
+  });
+});
