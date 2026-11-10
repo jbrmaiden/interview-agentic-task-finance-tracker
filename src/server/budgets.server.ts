@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { db as defaultDb, schema } from "#/db";
 import { formatMoney, parseAmountToMinor } from "#/lib/money";
 import { m } from "#/paraglide/messages";
@@ -271,27 +271,37 @@ export type RemoveBudgetResult =
   | { id: string }
   | { error: string; code: "budget_not_found" };
 
+/**
+ * Delete the alert records of the given budgets. They reference the budgets,
+ * so this must run before the budgets themselves are deleted.
+ */
+async function removeAlertsForBudgets(
+  budgetIdsToRemove: SQLWrapper,
+  db: Db,
+): Promise<void> {
+  await db
+    .delete(schema.budget_alerts)
+    .where(inArray(schema.budget_alerts.budget_id, budgetIdsToRemove));
+}
+
 /** Remove a budget. Transactions and categories are never touched. */
 export async function removeBudget(
   userId: string,
   budgetId: string,
   db: Db = defaultDb,
 ): Promise<RemoveBudgetResult> {
-  // Alert records first: they reference the budget.
-  const owned = db
+  const isTheBudget = and(
+    eq(schema.budgets.id, budgetId),
+    eq(schema.budgets.user_id, userId),
+  );
+  const budgetIdsToRemove = db
     .select({ id: schema.budgets.id })
     .from(schema.budgets)
-    .where(
-      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
-    );
-  await db
-    .delete(schema.budget_alerts)
-    .where(inArray(schema.budget_alerts.budget_id, owned));
+    .where(isTheBudget);
+  await removeAlertsForBudgets(budgetIdsToRemove, db);
   const deleted = await db
     .delete(schema.budgets)
-    .where(
-      and(eq(schema.budgets.id, budgetId), eq(schema.budgets.user_id, userId)),
-    )
+    .where(isTheBudget)
     .returning({ id: schema.budgets.id });
   if (deleted.length === 0) {
     return { error: "Budget not found", code: "budget_not_found" };
@@ -306,26 +316,16 @@ export async function removeBudgetsForCategories(
   db: Db = defaultDb,
 ): Promise<void> {
   if (categoryIds.length === 0) return;
-  const doomed = db
+  const onTheCategories = and(
+    eq(schema.budgets.user_id, userId),
+    inArray(schema.budgets.category_id, categoryIds),
+  );
+  const budgetIdsToRemove = db
     .select({ id: schema.budgets.id })
     .from(schema.budgets)
-    .where(
-      and(
-        eq(schema.budgets.user_id, userId),
-        inArray(schema.budgets.category_id, categoryIds),
-      ),
-    );
-  await db
-    .delete(schema.budget_alerts)
-    .where(inArray(schema.budget_alerts.budget_id, doomed));
-  await db
-    .delete(schema.budgets)
-    .where(
-      and(
-        eq(schema.budgets.user_id, userId),
-        inArray(schema.budgets.category_id, categoryIds),
-      ),
-    );
+    .where(onTheCategories);
+  await removeAlertsForBudgets(budgetIdsToRemove, db);
+  await db.delete(schema.budgets).where(onTheCategories);
 }
 
 export interface BudgetAlertCheckInput {
@@ -401,33 +401,110 @@ export async function runBudgetAlertCheck({
       result.sent++;
     } catch {
       result.failed++;
-      await db
-        .delete(schema.budget_alerts)
-        .where(
-          and(
-            eq(schema.budget_alerts.budget_id, budget.id),
-            eq(schema.budget_alerts.month, month),
-          ),
+      try {
+        await db
+          .delete(schema.budget_alerts)
+          .where(
+            and(
+              eq(schema.budget_alerts.budget_id, budget.id),
+              eq(schema.budget_alerts.month, month),
+            ),
+          );
+      } catch (err) {
+        // Keep going: one stuck claim must not stop the other budgets.
+        getLogger().error(
+          { userId, budgetId: budget.id, month, errorName: errorName(err) },
+          "budget alert claim release failed",
         );
+      }
     }
   }
   return result;
+}
+
+/** Class name of an error, safe to log (unlike its message). */
+function errorName(err: unknown): string {
+  return err instanceof Error ? err.name : "unknown";
 }
 
 /**
  * Run the alert check after a triggering write. Never throws: failures are
  * logged with ids and counts only and must not fail the user's action.
  */
-export async function runBudgetAlertCheckSafely(userId: string): Promise<void> {
+export async function runBudgetAlertCheckSafely(
+  userId: string,
+  db: Db = defaultDb,
+): Promise<void> {
   try {
-    const { sent, failed } = await runBudgetAlertCheck({ userId });
+    const { sent, failed } = await runBudgetAlertCheck({ userId, db });
     if (failed > 0) {
       getLogger().warn({ userId, sent, failed }, "budget alert sends failed");
     }
   } catch (err) {
+    // Never the message: database errors embed the failed SQL and its params.
     getLogger().error(
-      { userId, err: err instanceof Error ? err.message : "unknown" },
+      { userId, errorName: errorName(err) },
       "budget alert check failed",
     );
   }
+}
+
+export interface AllUsersAlertCheckResult extends BudgetAlertCheckResult {
+  /** Users with at least one budget that were checked. */
+  users: number;
+  /** Users whose check threw; the others were still checked. */
+  failedUsers: number;
+}
+
+/**
+ * Run the alert check for every user with at least one budget: the hourly
+ * backstop for alerts a write-triggered check missed or failed to send.
+ * One user's failure never stops the others.
+ */
+export async function runBudgetAlertCheckForAllUsers({
+  now = new Date(),
+  db = defaultDb,
+  send = sendEmail,
+}: Omit<BudgetAlertCheckInput, "userId"> = {}): Promise<AllUsersAlertCheckResult> {
+  const owners = await db
+    .selectDistinct({ userId: schema.budgets.user_id })
+    .from(schema.budgets);
+
+  const total: AllUsersAlertCheckResult = {
+    users: owners.length,
+    sent: 0,
+    failed: 0,
+    failedUsers: 0,
+  };
+  for (const { userId } of owners) {
+    try {
+      const { sent, failed } = await runBudgetAlertCheck({
+        userId,
+        now,
+        db,
+        send,
+      });
+      total.sent += sent;
+      total.failed += failed;
+    } catch (err) {
+      total.failedUsers++;
+      getLogger().error(
+        { userId, errorName: errorName(err) },
+        "budget alert check failed",
+      );
+    }
+  }
+  return total;
+}
+
+/**
+ * The one call every transaction write path makes once its write succeeded.
+ * Bulk paths pass whether anything changed so an empty request does no work.
+ * Never throws (see `runBudgetAlertCheckSafely`).
+ */
+export async function checkBudgetsAfterWrite(
+  userId: string,
+  changed = true,
+): Promise<void> {
+  if (changed) await runBudgetAlertCheckSafely(userId);
 }

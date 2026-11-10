@@ -6,10 +6,10 @@ Spec: `.scratch/budgets/spec.md` ("Triggers" and "Maintenance loop" implementati
 
 **Blocked by:** 04 (Budget alert email on manual transaction changes)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Each listed write path calls the user's alert check once after its write succeeds — once per request for bulk paths (import, re-categorise), never per row; errors are caught and never fail the action.
-- [ ] Budgets module exposes "run alert check for all users with budgets", used by the maintenance loop; it's isolated from the compliance sweep so a failure in one doesn't skip the other. TEST_MODE behaviour of the loop is unchanged (not armed).
-- [ ] Unit test: the all-users check alerts over-budget budgets across several users and skips users without budgets.
-- [ ] Per-path wiring verified in review (agreed: not separately tested).
-- [ ] All existing import, receipt, categorisation, and category E2E tests still pass; `pnpm run check` passes.
+- [x] Each listed write path calls the user's alert check once after its write succeeds — once per request for bulk paths (import, re-categorise), never per row; errors are caught and never fail the action.
+- [x] Budgets module exposes "run alert check for all users with budgets", used by the maintenance loop; it's isolated from the compliance sweep so a failure in one doesn't skip the other. TEST_MODE behaviour of the loop is unchanged (not armed).
+- [x] Unit test: the all-users check alerts over-budget budgets across several users and skips users without budgets.
+- [x] Per-path wiring verified in review (agreed: not separately tested).
+- [x] All existing import, receipt, categorisation, and category E2E tests still pass; `pnpm run check` passes.

@@ -1,7 +1,7 @@
 // @vitest-environment node
 // Required: TanStack Start's import protection mocks server modules in jsdom (client) environment.
 
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../src/db/index.ts";
 import {
@@ -11,6 +11,8 @@ import {
   listBudgets,
   removeBudget,
   removeBudgetsForCategories,
+  runBudgetAlertCheckSafely,
+  runBudgetAlertCheckForAllUsers,
 } from "../src/server/budgets.server.ts";
 
 const userId = "budgets-test-user";
@@ -710,12 +712,48 @@ describe("budget alerts", () => {
 
   it("retries on a later check after a failed send", async () => {
     await setup("100.00", 15000);
+    let failedAttempts = 0;
     await check(NOW, async () => {
+      failedAttempts++;
       throw new Error("smtp down");
     });
+    expect(failedAttempts).toBe(1);
     expect(sent).toHaveLength(0);
     await check();
     expect(sent).toHaveLength(1);
+  });
+
+  it("keeps alerting other budgets when releasing a failed send's claim fails", async () => {
+    await setup("10.00", 5000, "Alert A");
+    await setup("10.00", 5000, "Alert B");
+    const releaseFails = new Proxy(db, {
+      get(target, prop) {
+        if (prop === "delete") {
+          return (table: Parameters<typeof db.delete>[0]) => {
+            if (table === schema.budget_alerts) throw new Error("db down");
+            return target.delete(table);
+          };
+        }
+        const value = Reflect.get(target, prop, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    let attempts = 0;
+    const firstSendFails = async (msg: { to: string; subject: string; text: string }) => {
+      if (++attempts === 1) throw new Error("smtp down");
+      sent.push(msg);
+    };
+
+    const result = await runBudgetAlertCheck({
+      userId: alertUser,
+      now: NOW,
+      db: releaseFails,
+      send: firstSendFails,
+    });
+
+    expect(result).toEqual({ sent: 1, failed: 1 });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain("Alert B");
   });
 
   it("alerts parent and child budgets independently", async () => {
@@ -755,9 +793,13 @@ describe("budget alerts", () => {
     expect(sent[1]!.text).toContain("Alert Parent");
   });
 
-  it("never alerts for spending in earlier months", async () => {
-    const cat = await addCategory("Alert Old", null, alertUser);
-    const acc = await addAccount("PLN", alertUser);
+  it("never alerts for spending added in earlier months", async () => {
+    const { cat, acc } = await setup("100.00", 9000, "Alert Old");
+    await check();
+    expect(sent).toHaveLength(0);
+
+    // A backdated transaction would push a combined total over the limit,
+    // but only the budget month counts.
     await addTx({
       accountId: acc,
       categoryId: cat,
@@ -765,29 +807,139 @@ describe("budget alerts", () => {
       date: "2026-10-20",
       owner: alertUser,
     });
-    await createBudget(
-      alertUser,
-      { categoryId: cat, currency: "PLN", limit: "10.00" },
-      db,
-    );
     await check();
     expect(sent).toHaveLength(0);
   });
 
-  it("removeBudget and removeBudgetsForCategories drop the alert records", async () => {
+  it("alerts again for a budget recreated after removeBudget in the same month", async () => {
     const a = await setup("10.00", 5000, "Alert A");
-    const b = await setup("10.00", 5000, "Alert B");
     await check();
-    expect(sent).toHaveLength(2);
+    expect(sent).toHaveLength(1);
 
     expect(await removeBudget(alertUser, a.budgetId, db)).toEqual({
       id: a.budgetId,
     });
+    await createBudget(
+      alertUser,
+      { categoryId: a.cat, currency: "PLN", limit: "10.00" },
+      db,
+    );
+    await check();
+    expect(sent).toHaveLength(2);
+  });
+
+  it("alerts again for a budget recreated after removeBudgetsForCategories", async () => {
+    const b = await setup("10.00", 5000, "Alert B");
+    await check();
+    expect(sent).toHaveLength(1);
+
     await removeBudgetsForCategories(alertUser, [b.cat], db);
-    const left = await db
-      .select()
-      .from(schema.budget_alerts)
-      .where(eq(schema.budget_alerts.user_id, alertUser));
-    expect(left).toHaveLength(0);
+    await createBudget(
+      alertUser,
+      { categoryId: b.cat, currency: "PLN", limit: "10.00" },
+      db,
+    );
+    await check();
+    expect(sent).toHaveLength(2);
+  });
+});
+
+describe("runBudgetAlertCheckSafely logging", () => {
+  it("never logs the error message, which may carry SQL and parameters", async () => {
+    const logged: unknown[] = [];
+    const logger = await import("../src/server/logger.ts");
+    const spy = vi.spyOn(logger, "getLogger").mockReturnValue({
+      error: (...args: unknown[]) => logged.push(args),
+      warn: (...args: unknown[]) => logged.push(args),
+    } as unknown as ReturnType<typeof logger.getLogger>);
+    const failingDb = {
+      select: () => {
+        throw new Error(
+          "Failed query: select email from users params: super-secret@example.com",
+        );
+      },
+    } as unknown as typeof db;
+
+    try {
+      await runBudgetAlertCheckSafely("log-leak-user", failingDb);
+    } finally {
+      spy.mockRestore();
+    }
+
+    expect(logged).toHaveLength(1);
+    const text = JSON.stringify(logged);
+    expect(text).toContain("log-leak-user");
+    expect(text).not.toContain("Failed query");
+    expect(text).not.toContain("super-secret");
+  });
+});
+
+describe("budget alert check for all users", () => {
+  const users = ["all-users-a", "all-users-b", "all-users-none"];
+  const emailOf = (id: string) => `${id}@example.com`;
+
+  beforeEach(async () => {
+    for (const id of users) {
+      await db.insert(schema.users).values({
+        id,
+        username: id,
+        email: emailOf(id),
+        email_verified_at: new Date(),
+        password_hash: "x",
+      });
+    }
+  });
+
+  afterEach(async () => {
+    for (const id of users) {
+      await db
+        .delete(schema.budget_alerts)
+        .where(eq(schema.budget_alerts.user_id, id));
+      await db.delete(schema.budgets).where(eq(schema.budgets.user_id, id));
+      await db
+        .delete(schema.transactions)
+        .where(eq(schema.transactions.user_id, id));
+      await db.delete(schema.accounts).where(eq(schema.accounts.user_id, id));
+      await db
+        .delete(schema.categories)
+        .where(eq(schema.categories.user_id, id));
+      await db.delete(schema.users).where(eq(schema.users.id, id));
+    }
+  });
+
+  async function spend(owner: string, limit: string | null, spentMinor: number) {
+    const cat = await addCategory(`${owner} Food`, null, owner);
+    const acc = await addAccount("PLN", owner);
+    await addTx({
+      accountId: acc,
+      categoryId: cat,
+      amountMinor: -spentMinor,
+      date: "2026-11-03",
+      owner,
+    });
+    if (limit !== null) {
+      await createBudget(owner, { categoryId: cat, currency: "PLN", limit }, db);
+    }
+  }
+
+  it("alerts over-budget budgets of every user and skips users without budgets", async () => {
+    await spend("all-users-a", "10.00", 5000);
+    await spend("all-users-b", "10.00", 5000);
+    await spend("all-users-none", null, 5000);
+    const sent: Array<{ to: string; subject: string; text: string }> = [];
+
+    const result = await runBudgetAlertCheckForAllUsers({
+      now: NOW,
+      db,
+      send: async (msg) => {
+        sent.push(msg);
+      },
+    });
+
+    expect(result).toMatchObject({ sent: 2, failed: 0 });
+    expect(sent.map((s) => s.to).sort()).toEqual([
+      emailOf("all-users-a"),
+      emailOf("all-users-b"),
+    ]);
   });
 });
