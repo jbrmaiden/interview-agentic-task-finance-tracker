@@ -6,10 +6,10 @@ Spec: `.scratch/budgets/spec.md` (user stories 60–61, 65; "Compliance module" 
 
 **Blocked by:** 04 (Budget alert email on manual transaction changes)
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] The export document includes budgets and budget alerts; the zip gains a budgets CSV (category name, currency, limit as a decimal, created date).
-- [ ] Account hard delete removes budget alerts, then budgets, before categories, inside the existing transaction.
-- [ ] Budgets join the owned-entity table set.
-- [ ] The compliance unit tests' full-user seed gains a budget and a budget alert; export assertions check they appear (JSON and CSV) and hard-delete assertions check they're gone.
-- [ ] Existing compliance unit and E2E tests still pass; `pnpm run check` passes.
+- [x] The export document includes budgets and budget alerts; the zip gains a budgets CSV (category name, currency, limit as a decimal, created date).
+- [x] Account hard delete removes budget alerts, then budgets, before categories, inside the existing transaction.
+- [x] Budgets join the owned-entity table set.
+- [x] The compliance unit tests' full-user seed gains a budget and a budget alert; export assertions check they appear (JSON and CSV) and hard-delete assertions check they're gone.
+- [x] Existing compliance unit and E2E tests still pass; `pnpm run check` passes.

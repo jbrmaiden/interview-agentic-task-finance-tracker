@@ -137,6 +137,10 @@ describe("compliance: data export", () => {
     expect(json.receipts[0].image_file).toBe(`receipts/${userId}-rcpt.jpg`);
     expect(json.categorizationRules).toHaveLength(1);
     expect(json.subscription.plan).toBe("free");
+    expect(json.budgets).toHaveLength(1);
+    expect(json.budgets[0].limit_minor).toBe(50000);
+    expect(json.budgetAlerts).toHaveLength(1);
+    expect(json.budgetAlerts[0].month).toBe("2026-11");
 
     const txnCsv = strFromU8(files["transactions.csv"]);
     expect(txnCsv).toContain('"Grocery store"');
@@ -146,6 +150,11 @@ describe("compliance: data export", () => {
     expect(strFromU8(files["accounts.csv"])).toContain('"Checking"');
     expect(strFromU8(files["categories.csv"])).toContain('"Groceries"');
     expect(strFromU8(files["categorization_rules.csv"])).toContain('"grocery"');
+    const budgetsCsv = strFromU8(files["budgets.csv"]);
+    expect(budgetsCsv.split("\n")[0]).toBe(
+      '"id","category","currency","limit","created_at"',
+    );
+    expect(budgetsCsv).toContain('"Groceries","PLN","500.00"');
 
     expect(Array.from(files[`receipts/${userId}-rcpt.jpg`])).toEqual([
       0xff, 0xd8, 0xff, 0x42,
